@@ -18,6 +18,8 @@ import {
 import type { Game } from "../src/lib/game/types";
 
 const BOT_DELAY = 850;
+// A player is considered away once their browser stops checking in for a minute.
+export const AWAY_AFTER = 60_000;
 
 const actionValidator = v.object({
   type: v.union(
@@ -40,6 +42,9 @@ const actionValidator = v.object({
     v.literal("remove-bot"),
     v.literal("replace"),
     v.literal("rematch"),
+    v.literal("reopen"),
+    v.literal("leave"),
+    v.literal("kick"),
     v.literal("chat"),
   ),
   name: v.optional(v.string()),
@@ -53,7 +58,7 @@ const actionValidator = v.object({
 
 // The browser keeps a private random token; the public player id is its hash,
 // so ids shown to other players can never be used to impersonate a seat.
-async function identity(token: string) {
+export async function identity(token: string) {
   if (!/^[0-9a-f-]{36}$/i.test(token))
     throw new Error("Your session is invalid. Please reload the page.");
   const digest = await crypto.subtle.digest(
@@ -87,7 +92,7 @@ async function userFacing<R>(run: () => Promise<R>) {
 const newCode = () =>
   crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
 
-async function load(ctx: QueryCtx, code: string) {
+export async function load(ctx: QueryCtx, code: string) {
   const doc = await ctx.db
     .query("rooms")
     .withIndex("by_code", (q) => q.eq("code", code))
@@ -108,6 +113,7 @@ async function syncSeats(ctx: MutationCtx, g: Game) {
 }
 
 async function insert(ctx: MutationCtx, g: Game) {
+  g.turnAt ??= Date.now();
   await ctx.db.insert("rooms", {
     code: g.code,
     state: JSON.stringify(g),
@@ -118,6 +124,14 @@ async function insert(ctx: MutationCtx, g: Game) {
 }
 
 async function save(ctx: MutationCtx, doc: Doc<"rooms">, g: Game) {
+  const prev = JSON.parse(doc.state) as Game;
+  if (
+    prev.active !== g.active ||
+    prev.activeRole !== g.activeRole ||
+    prev.phase !== g.phase ||
+    prev.draftIndex !== g.draftIndex
+  )
+    g.turnAt = Date.now();
   await ctx.db.patch(doc._id, {
     state: JSON.stringify(g),
     updated: Date.now(),
@@ -210,17 +224,15 @@ export const create = mutation({
   args: {
     token: v.string(),
     name: v.string(),
-    mode: v.union(v.literal("solo"), v.literal("friends")),
-    players: v.optional(v.number()),
     target: v.optional(v.union(v.literal(7), v.literal(8))),
+    // Ignored; accepted so older open tabs can still create tables.
+    mode: v.optional(v.string()),
+    players: v.optional(v.number()),
   },
   handler: (ctx, args) =>
     userFacing(async () => {
       const id = await identity(args.token);
       const name = cleanName(args.name);
-      const players = args.players ?? 4;
-      if (!Number.isInteger(players) || players < 2 || players > 7)
-        throw new Error("Please check the information you entered.");
       const seats = await ctx.db
         .query("seats")
         .withIndex("by_player", (q) => q.eq("player", id))
@@ -236,11 +248,6 @@ export const create = mutation({
         );
       const code = newCode();
       const g = createGame(code, id, name, args.target ?? 8);
-      if (args.mode === "solo") {
-        for (let i = 1; i < players; i++)
-          applyAction(g, id, { type: "add-bot" });
-        applyAction(g, id, { type: "start" });
-      }
       await insert(ctx, g);
       return { code };
     }),
@@ -271,7 +278,26 @@ export const act = mutation({
           throw new Error(
             "The table has moved on. Please try your action again.",
           );
-        const previous = type === "rematch" ? structuredClone(g) : null;
+        // Test bots are opt-in per deployment: `npx convex env set ENABLE_BOTS true`.
+        if (
+          (type === "add-bot" || type === "remove-bot") &&
+          process.env.ENABLE_BOTS !== "true"
+        )
+          throw new Error("Test bots are turned off on this server.");
+        if (type === "replace") {
+          const seen = await ctx.db
+            .query("presence")
+            .withIndex("by_code_player", (q) =>
+              q.eq("code", g.code).eq("player", rest.target ?? ""),
+            )
+            .unique();
+          if (seen && Date.now() - seen.lastSeen < AWAY_AFTER)
+            throw new Error(
+              "That player is still at the table. Autopilot is only for players who have left.",
+            );
+        }
+        const previous =
+          type === "rematch" || type === "reopen" ? structuredClone(g) : null;
         applyAction(g, id, { type, ...rest });
         if (previous) {
           previous.code = newCode();

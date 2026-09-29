@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useSession } from "@/lib/session";
@@ -10,7 +10,6 @@ import {
   ArrowRight,
   ArrowUpRight,
   Users,
-  Bot,
   BookOpen,
   Clock3,
   Crown,
@@ -22,6 +21,7 @@ import {
   Swords,
   Check,
   Castle,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,10 +37,9 @@ import { toast } from "sonner";
 import { usePreference } from "@/lib/preferences";
 export function Home() {
   const router = useRouter();
-  const [mode, setMode] = useState<"solo" | "friends" | "join" | null>(null);
+  const [mode, setMode] = useState<"friends" | "join" | null>(null);
   const [name, setName] = usePreference("citadel-name");
   const [code, setCode] = useState("");
-  const [players, setPlayers] = useState(4);
   const [target, setTarget] = useState(8);
   const [busy, setBusy] = useState(false);
   const token = useSession();
@@ -49,6 +48,16 @@ export function Home() {
   const [selectedRole, setSelectedRole] = useState<number | null>(null);
   const [showAllGames, setShowAllGames] = useState(false);
   const finished = recent.filter((g) => g.phase === "finished");
+  useEffect(() => {
+    if (mode) {
+      document.getElementById("table-setup")?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+        block: "center",
+      });
+    }
+  }, [mode]);
   async function create() {
     if (mode === "join") {
       const clean = code.trim().toUpperCase();
@@ -67,8 +76,6 @@ export function Home() {
       const data = await createRoom({
         token,
         name: displayName,
-        mode,
-        players,
         target: target === 7 ? 7 : 8,
       });
       router.push(`/play/${data.code}`);
@@ -115,7 +122,7 @@ export function Home() {
             <br className="desktop-break" />
             and the friends you probably shouldn’t trust.
           </p>
-          <Button className="gold-button" onClick={() => setMode("solo")}>
+          <Button className="gold-button" onClick={() => setMode("friends")}>
             <Swords size={17} />
             Let’s play
             <ArrowRight size={17} />
@@ -165,24 +172,24 @@ export function Home() {
             </span>
             <span className="option-tag">GOOD COMPANY, GREAT RIVALRIES</span>
           </button>
-          <button className="play-option" onClick={() => setMode("solo")}>
+          <button className="play-option" onClick={() => setMode("join")}>
             <span className="option-icon amber">
-              <Bot size={25} strokeWidth={1.5} />
+              <Link2 size={25} strokeWidth={1.5} />
             </span>
             <span className="option-title">
-              Practice your craft
+              Join a friend’s table
               <ArrowUpRight size={19} />
             </span>
             <p>
-              Face clever computer rivals.
+              Got an invite link or code?
               <br />
-              Try a new strategy. Find your edge.
+              Your seat is waiting.
             </p>
             <span className="option-link">
-              Play against the realm
+              Enter a code
               <ArrowRight size={15} />
             </span>
-            <span className="option-tag">READY WHEN YOU ARE</span>
+            <span className="option-tag">THE PARTY IS ALREADY STARTING</span>
           </button>
           <Link href="/how-to-play" className="play-option learn-option">
             <span className="option-icon blue">
@@ -206,6 +213,111 @@ export function Home() {
             </span>
           </Link>
         </div>
+        {mode && (
+          <section
+            className="table-setup"
+            id="table-setup"
+            aria-label="Set up your table"
+          >
+            <div className="table-setup-heading">
+              <span className="dialog-emblem">
+                {mode === "join" ? <Link2 /> : <Users />}
+              </span>
+              <div>
+                <p className="eyebrow">YOUR PLACE AT THE TABLE</p>
+                <h3>
+                  {mode === "join"
+                    ? "Find your friends."
+                    : "Gather your friends."}
+                </h3>
+                <p>
+                  {mode === "join"
+                    ? "Enter the invite code from your host to find your table."
+                    : "Create a private table, then send the link to 1–6 friends. Everyone plays live from their own device."}
+                </p>
+              </div>
+              <button
+                className="table-setup-close"
+                type="button"
+                aria-label="Close setup"
+                disabled={busy}
+                onClick={() => setMode(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void create();
+              }}
+              className="setup-form"
+            >
+              {mode === "join" ? (
+                <>
+                  <label htmlFor="room-code" className="field-label">
+                    Invite code
+                  </label>
+                  <Input
+                    id="room-code"
+                    autoFocus
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. A7B2C9D4"
+                    maxLength={8}
+                    className="code-input"
+                  />
+                </>
+              ) : (
+                <>
+                  <label htmlFor="display-name" className="field-label">
+                    What shall we call you?
+                  </label>
+                  <Input
+                    id="display-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    maxLength={24}
+                    placeholder="Aspiring ruler"
+                  />
+                  <label className="field-label">The finish line</label>
+                  <div className="target-picker">
+                    {[8, 7].map((n) => (
+                      <button
+                        type="button"
+                        key={n}
+                        onClick={() => setTarget(n)}
+                        className={target === n ? "selected" : ""}
+                      >
+                        <span>
+                          {n === 8 ? "Classic game" : "A shorter story"}
+                        </span>
+                        <small>
+                          {n} districts{target === n && <Check size={14} />}
+                        </small>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              <Button type="submit" className="w-full" disabled={busy}>
+                {busy ? (
+                  <LoaderCircle className="animate-spin" />
+                ) : mode === "join" ? (
+                  <Link2 />
+                ) : (
+                  <Swords />
+                )}
+                {busy
+                  ? "Preparing your table…"
+                  : mode === "join"
+                    ? "Find my table"
+                    : "Create private table"}
+                <ArrowRight />
+              </Button>
+            </form>
+          </section>
+        )}
         <div className="invite-line">
           <Link2 size={15} />
           <span>Already have a seat at someone’s table?</span>
@@ -320,132 +432,6 @@ export function Home() {
         <Sparkles size={14} />
         <span>Some build cities. Others build legends. Which will you be?</span>
       </div>
-      <Dialog
-        open={mode !== null}
-        onOpenChange={(open) => {
-          if (!open && !busy) setMode(null);
-        }}
-      >
-        <DialogContent className="setup-dialog">
-          <DialogHeader>
-            <span className="dialog-emblem">
-              {mode === "friends" ? (
-                <Users />
-              ) : mode === "join" ? (
-                <Link2 />
-              ) : (
-                <Bot />
-              )}
-            </span>
-            <DialogTitle>
-              {mode === "friends"
-                ? "Good company starts here."
-                : mode === "join"
-                  ? "Your friends saved you a seat."
-                  : "Meet your next rivals."}
-            </DialogTitle>
-            <DialogDescription>
-              {mode === "friends"
-                ? "Create a private table and share the invite. Add computer rivals to fill any empty seats."
-                : mode === "join"
-                  ? "Enter the invite code from your host to find your table."
-                  : "A full game with computer opponents. Take your time — your progress is always saved."}
-            </DialogDescription>
-          </DialogHeader>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void create();
-            }}
-            className="setup-form"
-          >
-            {mode === "join" ? (
-              <>
-                <label htmlFor="room-code" className="field-label">
-                  Invite code
-                </label>
-                <Input
-                  id="room-code"
-                  autoFocus
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase())}
-                  placeholder="e.g. A7B2C9D4"
-                  maxLength={8}
-                  className="code-input"
-                />
-              </>
-            ) : (
-              <>
-                <label htmlFor="display-name" className="field-label">
-                  What shall we call you?
-                </label>
-                <Input
-                  id="display-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  maxLength={24}
-                  placeholder="Aspiring ruler"
-                />
-                {mode === "solo" && (
-                  <>
-                    <label className="field-label">
-                      Seats at the table <span>including you</span>
-                    </label>
-                    <div className="seat-picker">
-                      {[2, 3, 4, 5, 6, 7].map((n) => (
-                        <button
-                          type="button"
-                          key={n}
-                          onClick={() => setPlayers(n)}
-                          aria-pressed={players === n}
-                          className={players === n ? "selected" : ""}
-                        >
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-                <label className="field-label">The finish line</label>
-                <div className="target-picker">
-                  {[8, 7].map((n) => (
-                    <button
-                      type="button"
-                      key={n}
-                      onClick={() => setTarget(n)}
-                      className={target === n ? "selected" : ""}
-                    >
-                      <span>
-                        {n === 8 ? "Classic game" : "A shorter story"}
-                      </span>
-                      <small>
-                        {n} districts{target === n && <Check size={14} />}
-                      </small>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-            <Button type="submit" className="w-full" disabled={busy}>
-              {busy ? (
-                <LoaderCircle className="animate-spin" />
-              ) : mode === "join" ? (
-                <Link2 />
-              ) : (
-                <Swords />
-              )}
-              {busy
-                ? "Preparing your table…"
-                : mode === "join"
-                  ? "Find my table"
-                  : mode === "friends"
-                    ? "Create private table"
-                    : "Take my seat"}
-              <ArrowRight />
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
       <Dialog
         open={selectedRole !== null}
         onOpenChange={(open) => {

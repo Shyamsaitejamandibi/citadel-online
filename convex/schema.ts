@@ -17,4 +17,18 @@ export default defineSchema({
   })
     .index("by_player", ["player"])
     .index("by_code", ["code"]),
+  // Last check-in time for each browser viewing a table.
+  presence: defineTable({
+    code: v.string(),
+    player: v.string(),
+    lastSeen: v.number(),
+  })
+    .index("by_code", ["code"])
+    .index("by_code_player", ["code", "player"]),
+  // Short-lived emoji reactions shown over a player's seat.
+  reactions: defineTable({
+    code: v.string(),
+    player: v.string(),
+    emoji: v.string(),
+  }).index("by_code", ["code"]),
 });

@@ -2,11 +2,8 @@
 import {
   ArrowRight,
   Coins,
-  Layers3,
-  Check,
   BookOpen,
   ShieldCheck,
-  Sparkles,
   Anvil,
   FlaskConical,
 } from "lucide-react";
@@ -119,39 +116,8 @@ export function ActionPanel({
             <span>The {role.name}</span>
             <small>RANK {role.id}</small>
           </div>
-          <div className="turn-steps">
-            <div className={`turn-step ${g.gathered ? "done" : "current"}`}>
-              <span>{g.gathered ? <Check size={10} /> : 1}</span>Gather
-            </div>
-            <div
-              className={`turn-step ${g.builds ? "done" : g.gathered ? "current" : ""}`}
-            >
-              <span>{g.builds ? <Check size={10} /> : 2}</span>Build
-            </div>
-            <div className="turn-step">
-              <span>3</span>Finish
-            </div>
-          </div>
           <p className="power-copy">{role.description}</p>
           <div className="action-buttons">
-            {!g.gathered && !g.choices.length && (
-              <>
-                <Button disabled={busy} onClick={() => send({ type: "gold" })}>
-                  <Coins />
-                  Take 2 gold
-                  <ArrowRight className="ml-auto" />
-                </Button>
-                <Button
-                  disabled={busy || g.deckCount === 0}
-                  variant="outline"
-                  onClick={() => send({ type: "draw" })}
-                >
-                  <Layers3 />
-                  Draw district cards
-                  <ArrowRight className="ml-auto" />
-                </Button>
-              </>
-            )}
             {g.choices.length > 0 && (
               <p className="text-[10px] text-muted-foreground col-span-2">
                 Choose your cards on the table to continue.
@@ -167,24 +133,6 @@ export function ActionPanel({
                 Collect district income (+{income})
               </Button>
             )}
-            {[1, 2, 3, 8].includes(role.id) &&
-              !g.abilityUsed &&
-              !g.choices.length && (
-                <Button
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => onPower("ability")}
-                >
-                  <Sparkles />
-                  {role.id === 1
-                    ? "Choose assassination target"
-                    : role.id === 2
-                      ? "Choose robbery target"
-                      : role.id === 3
-                        ? "Exchange district cards"
-                        : "Lay siege to a district"}
-                </Button>
-              )}
             {p.city.some((c) => district(c).id === "smithy") &&
               !g.districtUsed.includes("smithy") &&
               !g.choices.length && (
@@ -209,20 +157,10 @@ export function ActionPanel({
                   Laboratory · discard for 1 gold
                 </Button>
               )}
-            {g.gathered && (
-              <Button disabled={busy} onClick={() => send({ type: "end" })}>
-                End my turn
-                <ArrowRight className="ml-auto" />
-              </Button>
-            )}
           </div>
-          {g.gathered && (
-            <p className="mt-3 text-[9px] text-muted-foreground">
-              {g.builds < (role.id === 7 ? 3 : 1)
-                ? "Select a card in your hand to build a district."
-                : "Your building is complete for this turn."}
-            </p>
-          )}
+          <p className="mt-3 text-xs text-muted-foreground">
+            Your main moves are in the middle of the table.
+          </p>
         </>
       ) : (
         <>

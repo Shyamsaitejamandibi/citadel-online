@@ -1,5 +1,12 @@
 import { CHARACTERS, DISTRICTS, character, district } from "./catalog";
-import type { Game, GameAction, GameView, Player, Score } from "./types";
+import type {
+  Game,
+  GameAction,
+  GameView,
+  Moment,
+  Player,
+  Score,
+} from "./types";
 export const shuffle = <T>(items: T[]): T[] => {
   const a = [...items];
   for (let i = a.length - 1; i > 0; i--) {
@@ -13,13 +20,15 @@ export function log(
   text: string,
   kind: Game["log"][number]["kind"] = "game",
   player?: string,
+  moment?: Moment,
 ) {
   g.log.push({
     id: (g.log.at(-1)?.id ?? 0) + 1,
     round: g.round,
     text,
     kind,
-    player,
+    ...(player ? { player } : {}),
+    ...(moment ? { moment } : {}),
   });
   if (g.log.length > 250) g.log.shift();
 }
@@ -161,6 +170,9 @@ function beginRound(g: Game) {
   log(
     g,
     `Round ${g.round}. ${g.players[crownIndex].name} holds the crown and chooses first.`,
+    "game",
+    undefined,
+    { type: "round", round: g.round, crown: g.crown },
   );
 }
 function start(g: Game) {
@@ -211,12 +223,28 @@ function nextTurn(g: Game) {
   for (let r = g.activeRole + 1; r <= 8; r++) {
     g.activeRole = r;
     const p = g.players.find((p) => p.roles.includes(r));
-    if (!p) continue;
+    if (!p) {
+      // Face-up characters are known to be out; everyone else is called aloud.
+      if (!g.faceup.includes(r))
+        log(
+          g,
+          `No one answers the call of the ${character(r).name}.`,
+          "game",
+          undefined,
+          {
+            type: "unanswered",
+            role: r,
+          },
+        );
+      continue;
+    }
     if (r === g.killed) {
       log(
         g,
         `${character(r).name} was assassinated and misses their turn.`,
         "power",
+        undefined,
+        { type: "killed", role: r },
       );
       continue;
     }
@@ -236,10 +264,22 @@ function nextTurn(g: Game) {
           g,
           `${character(r).name} loses ${stolen} gold to ${thief.name}, the Thief.`,
           "power",
+          undefined,
+          {
+            type: "robbed",
+            role: r,
+            player: p.id,
+            thief: thief.id,
+            gold: stolen,
+          },
         );
       }
     }
-    log(g, `${p.name} reveals the ${character(r).name}.`);
+    log(g, `${p.name} reveals the ${character(r).name}.`, "game", undefined, {
+      type: "reveal",
+      role: r,
+      player: p.id,
+    });
     return;
   }
   const deadKing =
@@ -257,6 +297,9 @@ function nextTurn(g: Game) {
     log(
       g,
       `${names} ${names.includes(" & ") ? "share" : "wins"} the crown. The cities are complete!`,
+      "game",
+      undefined,
+      { type: "winner", players: winners(g) },
     );
     return;
   }
@@ -316,11 +359,11 @@ export function applyAction(g: Game, id: string, a: GameAction) {
   if (a.type === "add-bot") {
     requireRule(
       id === g.host && g.phase === "lobby",
-      "Only the host can add rivals in the lobby.",
+      "Only the host can add test bots in the lobby.",
     );
     requireRule(g.players.length < 7, "This table seats up to seven.");
     const name =
-      BOT_NAMES.find((n) => !g.players.some((p) => p.name === n)) ?? "Rival";
+      BOT_NAMES.find((n) => !g.players.some((p) => p.name === n)) ?? "Bot";
     g.players.push(makePlayer(`bot-${crypto.randomUUID()}`, name, true));
     return;
   }
@@ -346,16 +389,47 @@ export function applyAction(g: Game, id: string, a: GameAction) {
     log(g, `${target.name} is now controlled by a computer rival.`);
     return;
   }
-  if (a.type === "start" || a.type === "rematch") {
+  if (a.type === "leave") {
+    requireRule(g.phase === "lobby", "You can only leave from the lobby.");
+    g.players = g.players.filter((x) => x.id !== id);
+    if (g.host === id && g.players.length) g.host = g.players[0].id;
+    log(g, `${p.name} leaves the table.`);
+    return;
+  }
+  if (a.type === "kick") {
+    requireRule(
+      id === g.host && g.phase === "lobby",
+      "Only the host can edit this table.",
+    );
+    requireRule(a.target !== id, "Choose another player.");
+    g.players = g.players.filter((x) => x.id !== a.target);
+    return;
+  }
+  if (a.type === "start" || a.type === "rematch" || a.type === "reopen") {
     requireRule(
       !g.archived,
       "This result is archived. Create a new table to play again.",
     );
-    requireRule(id === g.host, "Only the host can start the game.");
+    requireRule(
+      a.type === "rematch" ? !p.bot : id === g.host,
+      "Only the host can start the game.",
+    );
     requireRule(
       a.type === "start" ? g.phase === "lobby" : g.phase === "finished",
       "The table is not ready for a new game.",
     );
+    if (g.phase === "finished") {
+      g.series ??= { games: 0, wins: {} };
+      g.series.games++;
+      for (const w of winners(g))
+        g.series.wins[w] = (g.series.wins[w] ?? 0) + 1;
+    }
+    if (a.type === "reopen") {
+      g.phase = "lobby";
+      g.log = [];
+      log(g, `${p.name} opened the table for the next game.`);
+      return;
+    }
     start(g);
     return;
   }
@@ -466,7 +540,13 @@ export function applyAction(g: Game, id: string, a: GameAction) {
       log(g, `${p.name} builds the ${d.name}.`, "build");
       if (p.city.length >= g.target && !g.firstComplete) {
         g.firstComplete = p.id;
-        log(g, `${p.name} completes their city! This is the final round.`);
+        log(
+          g,
+          `${p.name} completes their city! This is the final round.`,
+          "game",
+          undefined,
+          { type: "complete", player: p.id },
+        );
       }
       break;
     }
@@ -498,10 +578,22 @@ export function applyAction(g: Game, id: string, a: GameAction) {
             g,
             `The Assassin targets the ${character(a.role).name}.`,
             "power",
+            undefined,
+            { type: "target", role: a.role, by: 1 },
           );
         } else {
           g.robbed = a.role;
-          log(g, `The Thief targets the ${character(a.role).name}.`, "power");
+          log(
+            g,
+            `The Thief targets the ${character(a.role).name}.`,
+            "power",
+            undefined,
+            {
+              type: "target",
+              role: a.role,
+              by: 2,
+            },
+          );
         }
       } else if (g.activeRole === 3) {
         if (a.target) {
@@ -544,6 +636,8 @@ export function applyAction(g: Game, id: string, a: GameAction) {
           g,
           `${p.name} destroys ${target.name}’s ${district(a.card).name} for ${cost} gold.`,
           "power",
+          undefined,
+          { type: "destroyed", player: target.id, by: p.id, card: a.card },
         );
         const graveyard = g.players.find(
           (x) => has(x, "graveyard") && !x.roles.includes(8) && x.gold > 0,

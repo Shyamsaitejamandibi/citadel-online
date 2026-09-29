@@ -15,6 +15,7 @@ export function DistrictCard({
   selected,
   compact = false,
   disabled = false,
+  badge,
 }: {
   card?: string;
   data?: District;
@@ -22,6 +23,7 @@ export function DistrictCard({
   selected?: boolean;
   compact?: boolean;
   disabled?: boolean;
+  badge?: string;
 }) {
   const d = data ?? district(card!);
   const Icon = icons[d.type];
@@ -29,7 +31,7 @@ export function DistrictCard({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`district-card type-${d.type} ${compact ? "compact" : ""} ${selected ? "selected" : ""}`}
+      className={`district-card type-${d.type} ${compact ? "compact" : ""} ${selected ? "selected" : ""} ${badge ? "has-badge" : ""}`}
       aria-label={`${d.name}, ${d.cost} gold, ${TYPE_LABELS[d.type]}. ${d.description}`}
       aria-pressed={selected}
     >
@@ -54,6 +56,13 @@ export function DistrictCard({
         <h3>{d.name}</h3>
         {!compact && <p>{d.description}</p>}
       </div>
+      {badge && (
+        <span
+          className={`district-badge ${badge === "Tap to build" ? "go" : ""}`}
+        >
+          {badge}
+        </span>
+      )}
       <div className="district-pips">
         {Array.from({ length: d.cost }, (_, i) => (
           <span key={i} />

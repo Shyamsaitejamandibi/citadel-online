@@ -9,9 +9,7 @@ import {
   BookOpen,
   Volume2,
   VolumeX,
-  ChevronRight,
   Crown,
-  Sparkles,
   Settings2,
 } from "lucide-react";
 import {
@@ -39,7 +37,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   ];
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      <header className="hub-header">
         <Link href="/" className="brand" aria-label="Citadels home">
           <div className="brand-mark">
             <Castle strokeWidth={1.3} />
@@ -49,9 +47,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <small>THE ONLINE TABLE</small>
           </div>
         </Link>
-        <div className="side-divider" />
-        <p className="nav-caption">YOUR KINGDOM</p>
-        <nav>
+        <nav aria-label="Main navigation">
           {nav.map((n) => (
             <Link
               key={n.href}
@@ -60,20 +56,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
             >
               <n.icon size={18} strokeWidth={1.65} />
               {n.label}
-              {n.href === "/" && <ChevronRight size={14} className="ml-auto" />}
             </Link>
           ))}
         </nav>
-        <div className="sidebar-bottom">
-          <div className="sidebar-note">
-            <Sparkles size={18} />
-            <p>
-              A familiar game.
-              <br />
-              <strong>A whole new table.</strong>
-            </p>
-            <span>All the intrigue. None of the setup.</span>
-          </div>
+        <div className="hub-utilities">
           <button
             className="utility-link"
             onClick={() => {
@@ -104,17 +90,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <Settings2 size={16} />
           </button>
         </div>
-      </aside>
+      </header>
       <div className="main-shell">
-        <header className="topbar">
-          <span>STRATEGY. INTRIGUE. A LITTLE AMBITION.</span>
-          <div>
-            <span className="status-dot" />
-            Your table awaits
-            <span className="topbar-rule" />
-            <span className="edition">CLASSIC EDITION</span>
-          </div>
-        </header>
         {children}
         <footer className="site-footer">
           <span>

@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     template: "%s · Citadels",
   },
   description:
-    "Gather your friends, choose your secret character, and build your legacy. Play classic Citadels online with private tables and computer rivals.",
+    "Gather your friends, choose your secret character, and build your legacy. Play classic Citadels live with your friends at a private online table.",
 };
 export default function RootLayout({
   children,

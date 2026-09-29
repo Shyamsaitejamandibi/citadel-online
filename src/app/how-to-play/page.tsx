@@ -152,9 +152,9 @@ export default function Page() {
             <summary>What if someone disconnects?</summary>
             <p>
               Return to the same link in the same browser to resume your seat.
-              The table waits for human players. If someone has left for good,
-              the host can replace their seat with a computer rival in table
-              settings.
+              The table waits for everyone. If someone has left for good, the
+              host can put their seat on autopilot in table settings so the rest
+              of you can finish.
             </p>
           </details>
         </section>
@@ -162,9 +162,9 @@ export default function Page() {
       <div className="hint-box">
         <Lightbulb size={17} />
         <span>
-          First game? Start with a four-player practice table. Read your
-          character’s power, collect gold when you’re short, and try building a
-          mix of district colors. There’s no timer.
+          First game? Open the Player aid card at the table. It’s the same
+          summary you’d find in the box. Read your character’s power, take gold
+          when you’re short, and try building a mix of district colors.
         </span>
       </div>
       <Link href="/collection" className="inline-link mt-5">

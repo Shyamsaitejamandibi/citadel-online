@@ -71,6 +71,7 @@ export function useGame(code: string) {
     [act, code, token, version],
   );
   return {
+    token,
     game,
     join: (result?.join as JoinInfo | undefined) ?? null,
     error: result?.error ?? "",

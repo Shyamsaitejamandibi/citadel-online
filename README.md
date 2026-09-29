@@ -22,10 +22,12 @@ npm run dev -- --port 3002
 
 ## Play
 
-- **Practice your craft:** play a complete game against computer rivals, with 2–7 seats and a 7- or 8-district finish line.
-- **Play with friends:** create a private lobby, share its link or eight-character code, and optionally fill seats with bots. The host starts the game.
+- **Play with friends:** create a private table, share its link or eight-character code, and start once at least two people are seated (2–7 players, 7- or 8-district finish line). Only real players: there are no computer rivals.
+- **Feel the table:** setup, invitations, seats, choices, hand, city, and game activity live on one tabletop scene. Online/away dots, a “thinking…” timer, floating emoji reactions, and full-screen game moments bring the players together.
+- **Player aid:** open the two-sided reference card (turn summary and the eight characters in calling order) whenever you need it. The active turn walks you through each step.
+- **Game after game:** “Play again” restarts with the same people at the same link, with a running win tally; the host can also reopen the lobby so new friends can join.
 - **Resume:** revisit the room link in the same browser. The game is stored in Convex and your seat is recovered through a private session token kept in this browser's local storage.
-- **Disconnected player:** the host can permanently hand another human seat to a bot through table settings.
+- **Disconnected player:** once a player has been away for a minute, the host can put their seat on autopilot from table settings so the game can finish.
 - **Table talk:** room chat sits beside the game journal; on phones it appears below your city.
 - **Learn:** searchable character/district collection, field guide, contextual abilities, build validation, and automatic scoring.
 
@@ -58,14 +60,15 @@ Any host works the same way: the Next.js app is stateless, so it runs fine on se
 - `src/lib/game/catalog.ts`: character and district definitions.
 - `src/lib/game/engine.ts`: rules, state transitions, scoring and bot strategy.
 - `convex/schema.ts`: `rooms` (serialized game state) and `seats` (human player → table index).
-- `convex/rooms.ts`: room creation, joining, action handling, per-player views and scheduled bot moves.
+- `convex/rooms.ts`: room creation, joining, action handling, per-player views and scheduled autopilot moves.
+- `convex/social.ts`: presence heartbeats and short-lived emoji reactions.
 - `src/lib/session.ts`: private per-browser session token.
 - `src/lib/game/use-game.ts`: live Convex subscription, actions and connection status.
 - `src/components/game/`: table, guided actions, draft, card inspection, powers, chat, lobby and results.
 
-The server validates every move. Opponent hands, uncalled roles, deck order and private draw choices are removed **before** responses reach the browser. Public player IDs are SHA-256 hashes of private session tokens. Convex mutations are serializable transactions, and state versions reject conflicting moves. Bots use their own hand and public city information to choose actions; hidden opponent characters are not used to select assassination or theft targets.
+The server validates every move. Opponent hands, uncalled roles, deck order and private draw choices are removed **before** responses reach the browser. Public player IDs are SHA-256 hashes of private session tokens. Convex mutations are serializable transactions, and state versions reject conflicting moves. Autopilot seats use their own hand and public city information to choose actions; hidden opponent characters are not used to select assassination or theft targets.
 
-Computer moves are scheduled on the Convex backend and advance even when nobody is viewing the table. Human turns have no time limit. Sessions are browser-bound; there is no account login, cross-device identity, matchmaking, ranking ladder, or expansion support.
+Autopilot moves are scheduled on the Convex backend and advance even when nobody is viewing the table. Human turns have no time limit. Sessions are browser-bound; there is no account login, cross-device identity, matchmaking, ranking ladder, or expansion support.
 
 ## Verification
 

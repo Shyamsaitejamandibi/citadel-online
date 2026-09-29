@@ -370,3 +370,50 @@ test("rematches reset the table, while archived results remain immutable", () =>
   );
   assertConservation(g);
 });
+test("any player can call a rematch, and wins are tallied across games", () => {
+  const g = setup(3);
+  g.phase = "finished";
+  g.firstComplete = "p1";
+  g.players[1].city = ["palace:0"];
+  applyAction(g, "p1", { type: "rematch" });
+  assert.equal(g.phase, "draft");
+  assert.deepEqual(g.series, { games: 1, wins: { p1: 1 } });
+  g.phase = "finished";
+  assert.throws(() => applyAction(g, "p1", { type: "reopen" }), /host/);
+  applyAction(g, "host", { type: "reopen" });
+  assert.equal(g.phase, "lobby");
+  assert.equal(g.series?.games, 2);
+});
+test("lobby players can leave, and a leaving host hands over the table", () => {
+  const g = createGame("TESTCODE", "host", "You");
+  g.players.push(makePlayer("p1", "Rival 1"), makePlayer("p2", "Rival 2"));
+  applyAction(g, "host", { type: "kick", target: "p2" });
+  assert.deepEqual(
+    g.players.map((p) => p.id),
+    ["host", "p1"],
+  );
+  applyAction(g, "host", { type: "leave" });
+  assert.equal(g.host, "p1");
+  assert.throws(() => applyAction(g, "p1", { type: "kick", target: "p1" }));
+});
+test("calls are announced, and a murdered character stays anonymous", () => {
+  const g = setup(4);
+  while (g.phase === "draft")
+    applyAction(g, g.active, { type: "draft", role: g.available[0] });
+  const held = g.players.flatMap((p) => p.roles);
+  const moments = g.log.flatMap((l) => (l.moment ? [l.moment] : []));
+  for (const m of moments)
+    if (m.type === "unanswered") {
+      assert.ok(!held.includes(m.role));
+      assert.ok(!g.faceup.includes(m.role));
+    }
+  const t = turn(1);
+  const victim = t.players[1];
+  victim.roles = [6];
+  applyAction(t, "host", { type: "gold" });
+  applyAction(t, "host", { type: "ability", role: 6 });
+  applyAction(t, "host", { type: "end" });
+  const killed = t.log.find((l) => l.moment?.type === "killed")!;
+  assert.deepEqual(killed.moment, { type: "killed", role: 6 });
+  assert.ok(!killed.text.includes(victim.name));
+});

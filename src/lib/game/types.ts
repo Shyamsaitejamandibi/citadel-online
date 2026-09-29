@@ -25,10 +25,13 @@ export type GameAction = {
     | "laboratory"
     | "recover"
     | "pass-recovery"
+    | "replace"
     | "add-bot"
     | "remove-bot"
-    | "replace"
     | "rematch"
+    | "reopen"
+    | "leave"
+    | "kick"
     | "chat";
   role?: number;
   card?: string;
@@ -36,6 +39,23 @@ export type GameAction = {
   target?: string;
   text?: string;
 };
+// A dramatic beat the table should play out for everyone (reveals, murders…).
+export type Moment =
+  | { type: "reveal"; role: number; player: string }
+  | { type: "unanswered"; role: number }
+  | { type: "killed"; role: number }
+  | {
+      type: "robbed";
+      role: number;
+      player: string;
+      thief: string;
+      gold: number;
+    }
+  | { type: "target"; role: number; by: number }
+  | { type: "destroyed"; player: string; by: string; card: string }
+  | { type: "complete"; player: string }
+  | { type: "winner"; players: string[] }
+  | { type: "round"; round: number; crown: string };
 export type Game = {
   archived?: boolean;
   code: string;
@@ -71,7 +91,12 @@ export type Game = {
     text: string;
     kind: "game" | "build" | "power" | "chat";
     player?: string;
+    moment?: Moment;
   }[];
+  // Wins per player id across rematches at this table.
+  series?: { games: number; wins: Record<string, number> };
+  // When the current player started acting, for the "thinking…" timer.
+  turnAt?: number;
   recovery: { player: string; card: string; warlord: string } | null;
   version: number;
   updatedAt: number;
