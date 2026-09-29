@@ -1,0 +1,10 @@
+services:
+  citadels:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - citadels-data:/data
+    restart: unless-stopped
+volumes:
+  citadels-data:
