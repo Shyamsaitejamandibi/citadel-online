@@ -1,7 +1,11 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { useSession } from "@/lib/session";
+import { errorMessage } from "@/lib/game/use-game";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -31,15 +35,6 @@ import { Input } from "@/components/ui/input";
 import { CharacterCard } from "@/components/game/character-card";
 import { toast } from "sonner";
 import { usePreference } from "@/lib/preferences";
-type Recent = {
-  code: string;
-  name: string;
-  phase: string;
-  round: number;
-  players: number;
-  score: number | null;
-  won: boolean;
-};
 export function Home() {
   const router = useRouter();
   const [mode, setMode] = useState<"solo" | "friends" | "join" | null>(null);
@@ -48,15 +43,11 @@ export function Home() {
   const [players, setPlayers] = useState(4);
   const [target, setTarget] = useState(8);
   const [busy, setBusy] = useState(false);
-  const [recent, setRecent] = useState<Recent[]>([]);
+  const token = useSession();
+  const recent = useQuery(api.rooms.list, token ? { token } : "skip") ?? [];
+  const createRoom = useMutation(api.rooms.create);
   const [selectedRole, setSelectedRole] = useState<number | null>(null);
   const [showAllGames, setShowAllGames] = useState(false);
-  useEffect(() => {
-    fetch("/api/rooms")
-      .then((r) => r.json())
-      .then((d) => setRecent(d.games ?? []))
-      .catch(() => {});
-  }, []);
   const finished = recent.filter((g) => g.phase === "finished");
   async function create() {
     if (mode === "join") {
@@ -68,20 +59,21 @@ export function Home() {
       router.push(`/play/${clean}`);
       return;
     }
+    if (!mode || !token) return;
     setBusy(true);
     try {
       const displayName = name.trim() || "Aspiring ruler";
       localStorage.setItem("citadel-name", displayName);
-      const r = await fetch("/api/rooms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: displayName, mode, players, target }),
+      const data = await createRoom({
+        token,
+        name: displayName,
+        mode,
+        players,
+        target: target === 7 ? 7 : 8,
       });
-      const data = await r.json();
-      if (!r.ok) throw Error(data.error);
       router.push(`/play/${data.code}`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not create a table.");
+      toast.error(errorMessage(e));
       setBusy(false);
     }
   }

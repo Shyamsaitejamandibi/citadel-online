@@ -1,5 +1,26 @@
-import { test, expect } from "@playwright/test";
-import type { GameView } from "../../src/lib/game/types";
+import { test, expect, type Page } from "@playwright/test";
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "../../convex/_generated/api";
+import type { GameAction, GameView } from "../../src/lib/game/types";
+
+try {
+  process.loadEnvFile(".env.local");
+} catch {}
+const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+const sessionOf = (page: Page) =>
+  page.evaluate(() => localStorage.getItem("citadel-session")!);
+async function viewOf(page: Page, code: string) {
+  const token = await sessionOf(page);
+  return (await convex.query(api.rooms.get, { token, code })).game as GameView;
+}
+async function actAs(
+  page: Page,
+  code: string,
+  action: GameAction & { version?: number },
+) {
+  const token = await sessionOf(page);
+  return convex.mutation(api.rooms.act, { token, code, action });
+}
 
 test("home, character library, search and mobile fit", async ({ page }) => {
   const errors: string[] = [];
@@ -51,9 +72,8 @@ test("practice game supports drafting, gathering, building and reload", async ({
     path: "artifacts/table-desktop.png",
     fullPage: true,
   });
-  const code = page.url().split("/").pop();
-  const state = async (): Promise<GameView> =>
-    (await (await page.request.get(`/api/rooms/${code}`)).json()).game;
+  const code = page.url().split("/").pop()!;
+  const state = () => viewOf(page, code);
   let g = await state();
   const best = [6, 4, 5, 7, 1, 2, 3, 8].find((r) => g.available.includes(r))!;
   await page
@@ -140,7 +160,7 @@ test("two independent browsers share a private table without leaking secrets", a
       .getByRole("button", { name: "Create private table", exact: true })
       .click();
     await expect(h).toHaveURL(/\/play\/[A-Z0-9]{8}$/);
-    const code = h.url().split("/").pop();
+    const code = h.url().split("/").pop()!;
     await f.goto(`/play/${code}`);
     await f
       .getByRole("textbox", { name: "Your display name" })
@@ -153,12 +173,8 @@ test("two independent browsers share a private table without leaking secrets", a
     await expect(
       h.getByRole("heading", { name: "Who will you be?" }),
     ).toBeVisible();
-    const hostView: GameView = (
-      await (await host.request.get(`/api/rooms/${code}`)).json()
-    ).game;
-    const guestView: GameView = (
-      await (await guest.request.get(`/api/rooms/${code}`)).json()
-    ).game;
+    const hostView = await viewOf(h, code);
+    const guestView = await viewOf(f, code);
     expect(
       hostView.players.find((p) => p.id === hostView.me)!.hand,
     ).toHaveLength(4);
@@ -167,15 +183,12 @@ test("two independent browsers share a private table without leaking secrets", a
     ).toHaveLength(0);
     expect(guestView.available).toHaveLength(0);
     expect("deck" in guestView).toBe(false);
-    const token = (await host.cookies()).find(
-      (c) => c.name === "citadel-session",
-    )!.value;
+    const token = await sessionOf(h);
     expect(JSON.stringify(hostView)).not.toContain(token);
     expect(hostView.me).not.toBe(token);
-    const wrongTurn = await guest.request.post(`/api/rooms/${code}`, {
-      data: { type: "draft", role: hostView.available[0] },
-    });
-    expect(wrongTurn.status()).toBe(400);
+    await expect(
+      actAs(f, code, { type: "draft", role: hostView.available[0] }),
+    ).rejects.toThrow();
     await h.locator(".draft-cards .character-card").first().click();
     await h
       .getByRole("button", { name: "Choose character", exact: true })
@@ -183,35 +196,20 @@ test("two independent browsers share a private table without leaking secrets", a
     await expect(
       f.getByRole("heading", { name: "Who will you be?" }),
     ).toBeVisible();
-    const updated: GameView = (
-      await (await guest.request.get(`/api/rooms/${code}`)).json()
-    ).game;
+    const updated = await viewOf(f, code);
     expect(
       updated.players.find((p) => p.id === hostView.me)!.roles,
     ).toHaveLength(0);
-    const old = await host.request.post(`/api/rooms/${code}`, {
-      data: {
+    await expect(
+      actAs(h, code, {
         type: "draft",
         role: hostView.available[1],
         version: hostView.version,
-      },
-    });
-    expect(old.status()).toBe(400);
-    const crossOrigin = await host.request.post(`/api/rooms/${code}`, {
-      headers: { origin: "https://untrusted.example" },
-      data: { type: "chat", text: "should fail" },
-    });
-    expect(crossOrigin.status()).toBe(400);
-    await host.request.post(`/api/rooms/${code}`, {
-      data: { type: "chat", text: "Good luck, friend!" },
-    });
+      }),
+    ).rejects.toThrow();
+    await actAs(h, code, { type: "chat", text: "Good luck, friend!" });
     await expect
-      .poll(async () =>
-        JSON.stringify(
-          (await (await guest.request.get(`/api/rooms/${code}`)).json()).game
-            .log,
-        ),
-      )
+      .poll(async () => JSON.stringify((await viewOf(f, code)).log))
       .toContain("Good luck, friend!");
     await f.reload();
     await expect(

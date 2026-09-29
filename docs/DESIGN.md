@@ -14,6 +14,6 @@ The interface-polish skill was applied to the new application. The comparison be
 | No keyboard or screen-reader support | Named controls, visible focus rings, accessible shadcn dialogs, semantic page headings, and polite turn announcements.                                         |
 | No mobile layout                     | Navigation becomes a compact header, play choices stack, table actions precede the board, rival seats scroll, cards reflow, and chat moves below the city.     |
 | Manual tabletop bookkeeping          | Guided resource gathering, legal build checks, automatic role bonuses, crown tracking, a game journal, score breakdowns and preserved results after rematches. |
-| No session continuity                | Server-persisted state, per-player private views, reconnect polling, same-browser seat restoration, saved table history, and host-controlled bot replacement.  |
+| No session continuity                | Server-persisted state, per-player private views, live Convex subscriptions, same-browser seat restoration, saved table history, and host-controlled bot replacement.  |
 
 Visual verification screenshots are in `artifacts/`. Browser testing includes 1440px desktop and 390px mobile viewports, with an explicit check for horizontal page overflow. Touch targets for navigation and primary controls are at least 40px.

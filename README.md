@@ -4,12 +4,15 @@ A playable, unofficial web adaptation of classic **Citadels**, built with **Next
 
 ## Run locally
 
-Requires **Node.js 24+** (uses built-in `node:sqlite`). No API keys or external database required.
+Requires **Node.js 24+** and a free [Convex](https://convex.dev) account. Game state lives in Convex, which also pushes live table updates to every player.
 
 ```sh
 npm ci
-npm run dev
+npx convex dev   # first run: log in and create/select a project; keeps functions in sync
+npm run dev      # in a second terminal
 ```
+
+`npx convex dev` writes `CONVEX_DEPLOYMENT` and `NEXT_PUBLIC_CONVEX_URL` to `.env.local`.
 
 Open the URL printed by Next.js. If port 3000 is occupied, Next.js picks an available port. To choose explicitly:
 
@@ -21,7 +24,7 @@ npm run dev -- --port 3002
 
 - **Practice your craft:** play a complete game against computer rivals, with 2–7 seats and a 7- or 8-district finish line.
 - **Play with friends:** create a private lobby, share its link or eight-character code, and optionally fill seats with bots. The host starts the game.
-- **Resume:** revisit the room link in the same browser. The game is stored on the server and your seat is recovered through a private, HTTP-only cookie.
+- **Resume:** revisit the room link in the same browser. The game is stored in Convex and your seat is recovered through a private session token kept in this browser's local storage.
 - **Disconnected player:** the host can permanently hand another human seat to a bot through table settings.
 - **Table talk:** room chat sits beside the game journal; on phones it appears below your city.
 - **Learn:** searchable character/district collection, field guide, contextual abilities, build validation, and automatic scoring.
@@ -42,36 +45,27 @@ The classic eight characters: Assassin, Thief, Magician, King, Bishop, Merchant,
 
 This targets the **classic base game**, not later expansion character sets. The online host receives the initial crown instead of selecting the oldest player. Rules reference: [classic rulebook](https://www.fantasyflightgames.com/ffg_content/Citadels/support/citadels-rules-english.pdf). Card descriptions and illustrations are original to this implementation.
 
-## Production
+## Deploy to Vercel
 
-```sh
-npm run build
-npm start
-```
+1. In the [Convex dashboard](https://dashboard.convex.dev), open the project → **Production** deployment → **Settings → Deploy keys**, and generate a **production deploy key**.
+2. In Vercel → Project **citadel-online** → **Settings → Environment Variables**, add `CONVEX_DEPLOY_KEY` with that key for the **Production** environment. (For preview deployments, add a separate *preview* deploy key scoped to **Preview**.)
+3. Redeploy. `vercel.json` sets the build command to `npx convex deploy --cmd 'npm run build'`, which pushes `convex/` to your production deployment and injects `NEXT_PUBLIC_CONVEX_URL` into the Next.js build.
 
-Deploy as a **long-running Node.js 24 server with a persistent writable volume**. SQLite files live in `.data/`, or set `CITADEL_DATA_DIR` to an absolute persistent directory. Use HTTPS in production (session cookies are Secure). Back up the database with SQLite's backup API or while the server is stopped, including WAL files if applicable.
-
-A Docker setup is included:
-
-```sh
-docker compose up --build -d
-```
-
-Terminate HTTPS with your hosting platform or reverse proxy. Keep this app as one instance per database; it is not configured for horizontally distributed servers or ephemeral/serverless filesystems. No public deployment or cloud account is provisioned by this repository.
+Any host works the same way: the Next.js app is stateless, so it runs fine on serverless or multiple instances. For Docker, pass `NEXT_PUBLIC_CONVEX_URL` at build time (`NEXT_PUBLIC_CONVEX_URL=… docker compose up --build -d`) after running `npx convex deploy`.
 
 ## Architecture
 
 - `src/lib/game/catalog.ts`: character and district definitions.
 - `src/lib/game/engine.ts`: rules, state transitions, scoring and bot strategy.
-- `src/lib/game/store.ts`: SQLite WAL persistence with atomic transactions.
-- `src/lib/game/http.ts`: private guest identities, origin checks and action validation.
-- `src/app/api/rooms/`: room creation, joining, action handling and per-player views.
-- `src/lib/game/use-game.ts`: one-second polling, stale-response protection and reconnect handling.
+- `convex/schema.ts`: `rooms` (serialized game state) and `seats` (human player → table index).
+- `convex/rooms.ts`: room creation, joining, action handling, per-player views and scheduled bot moves.
+- `src/lib/session.ts`: private per-browser session token.
+- `src/lib/game/use-game.ts`: live Convex subscription, actions and connection status.
 - `src/components/game/`: table, guided actions, draft, card inspection, powers, chat, lobby and results.
 
-The server validates every move. Opponent hands, uncalled roles, deck order and private draw choices are removed **before** responses reach the browser. Public player IDs are hashes of private cookie tokens. SQLite transactions and state versions reject conflicting moves. Bots use their own hand and public city information to choose actions; hidden opponent characters are not used to select assassination or theft targets.
+The server validates every move. Opponent hands, uncalled roles, deck order and private draw choices are removed **before** responses reach the browser. Public player IDs are SHA-256 hashes of private session tokens. Convex mutations are serializable transactions, and state versions reject conflicting moves. Bots use their own hand and public city information to choose actions; hidden opponent characters are not used to select assassination or theft targets.
 
-Polling advances computer moves while at least one player is viewing the table. Human turns have no time limit. Sessions are browser-bound; there is no account login, cross-device identity, matchmaking, ranking ladder, or expansion support.
+Computer moves are scheduled on the Convex backend and advance even when nobody is viewing the table. Human turns have no time limit. Sessions are browser-bound; there is no account login, cross-device identity, matchmaking, ranking ladder, or expansion support.
 
 ## Verification
 
@@ -80,16 +74,13 @@ npm run typecheck
 npm run lint
 npm test
 npm run build
-npm run test:production
 ```
 
-The production smoke test launches an isolated production server and verifies persistence across restarts, completed-game recovery, rematches, and archived result protection.
-
-Browser tests need the app running and Playwright Chromium installed:
+Browser tests need the app running against your Convex dev deployment (they read `.env.local`) and Playwright Chromium installed:
 
 ```sh
 npx playwright install chromium
 TEST_BASE_URL=http://localhost:3002 npm run test:e2e
 ```
 
-Tests cover complete simulations for every table size, individual power interactions, card conservation, hidden information, browser play, saved games, multiplayer synchronization, forged origins, stale actions and mobile overflow. `artifacts/` contains browser screenshots from visual verification. Artwork provenance and design notes are in `docs/`.
+Tests cover complete simulations for every table size, individual power interactions, card conservation, hidden information, browser play, saved games, multiplayer synchronization, stale actions and mobile overflow. `artifacts/` contains browser screenshots from visual verification. Artwork provenance and design notes are in `docs/`.

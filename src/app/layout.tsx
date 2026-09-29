@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DM_Sans, Cormorant_Garamond } from "next/font/google";
+import { ConvexClientProvider } from "@/components/convex-provider";
 import { Shell } from "@/components/shell";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "sonner";
@@ -28,7 +29,9 @@ export default function RootLayout({
     <html lang="en" className={`${sans.variable} ${serif.variable}`}>
       <body>
         <TooltipProvider>
-          <Shell>{children}</Shell>
+          <Shell>
+            <ConvexClientProvider>{children}</ConvexClientProvider>
+          </Shell>
           <Toaster position="bottom-right" richColors />
         </TooltipProvider>
       </body>
