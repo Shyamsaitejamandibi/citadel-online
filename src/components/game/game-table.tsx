@@ -23,6 +23,10 @@ import {
   VolumeX,
   Settings2,
   Sparkles,
+  Focus,
+  GraduationCap,
+  Anvil,
+  FlaskConical,
 } from "lucide-react";
 import { savePreference, usePreference } from "@/lib/preferences";
 import { useGame } from "@/lib/game/use-game";
@@ -46,13 +50,17 @@ import { CityDialog, InspectDialog, PowerDialog } from "./game-dialogs";
 import { usePresence, useReactions } from "@/lib/game/use-table-life";
 import { Moments } from "./moments";
 import { PlayerAid } from "./player-aid";
-import { ReactionBar, SeatStrip, clock } from "./seats";
+import { SeatStrip, clock } from "./seats";
 import { Avatar } from "./avatar";
 import { useNow } from "@/lib/game/use-table-life";
+import { Workbench } from "./workbench";
+import { RoundTrack } from "./round-track";
+import { FirstTurn } from "./first-turn";
+import { CatchUp } from "./catch-up";
 export function GameTable({ code }: { code: string }) {
   const { token, game: g, join, error, connected, busy, send } = useGame(code);
   const online = usePresence(code, token, !!g);
-  const { live: reactions, send: react } = useReactions(code, token);
+  const { live: reactions } = useReactions(code, token);
   // Bring the table into view whenever it becomes your move (vital on phones,
   // where the stage is often scrolled away).
   const myMove =
@@ -64,11 +72,25 @@ export function GameTable({ code }: { code: string }) {
   useEffect(() => {
     if (myMove)
       document
-        .querySelector(".game-stage, .lobby-experience")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        .querySelector(".living-table, .lobby-experience")
+        ?.scrollIntoView({
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
+            .matches
+            ? "auto"
+            : "smooth",
+          block: "nearest",
+        });
   }, [myMove]);
   for (let r = 1; r <= 8; r++)
     preload(`/art/character-${r}.webp`, { as: "image" });
+  const [learn, setLearn] = useState(false);
+  const [focus, setFocus] = usePreference("citadel-focus", "off");
+  const [plannedValue, setPlannedValue] = usePreference(`citadel-plan-${code}`);
+  useEffect(() => {
+    if (!g) return;
+    const playing = g.phase !== "lobby" && g.phase !== "finished";
+    document.title = `${playing && g.active === g.me ? "Your turn · " : ""}${g.name} · Citadels`;
+  }, [g]);
   const [joinName, setJoinName] = useState("");
   const [profileName] = usePreference("citadel-name");
   const [role, setRole] = useState<number | null>(null);
@@ -150,11 +172,12 @@ export function GameTable({ code }: { code: string }) {
   const active = g.players.find((p) => p.id === g.active);
   const choices = choice.filter((c) => g.choices.includes(c));
   const selectedRole = role && g.available.includes(role) ? role : null;
-  const handSorted = [...me.hand].sort(
-    (a, b) => district(a).cost - district(b).cost,
-  );
+  const planned = me.hand.includes(plannedValue) ? plannedValue : null;
+  const plan = (card: string | null) => setPlannedValue(card ?? "");
   return (
-    <main className={`table-content ${g.phase === "lobby" ? "lobby-content" : ""}`}>
+    <main
+      className={`table-content table-v2 ${g.phase === "lobby" ? "lobby-content" : ""} ${focus === "on" ? "focus-mode" : ""}`}
+    >
       <div className="table-header">
         <div>
           <p className="eyebrow">
@@ -172,7 +195,24 @@ export function GameTable({ code }: { code: string }) {
             {connected ? "Table connected" : "Reconnecting"}
           </span>
           <span className="room-code">{code}</span>
+          <Button
+            variant="outline"
+            aria-label="Practice your first turn"
+            onClick={() => setLearn(true)}
+          >
+            <GraduationCap size={15} />
+          </Button>
           <PlayerAid g={g} />
+          {g.phase !== "lobby" && (
+            <Button
+              variant="outline"
+              aria-label="Focus on the game"
+              aria-pressed={focus === "on"}
+              onClick={() => setFocus(focus === "on" ? "off" : "on")}
+            >
+              <Focus size={15} />
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={() => copyInvite(code)}
@@ -199,6 +239,7 @@ export function GameTable({ code }: { code: string }) {
           automatically.
         </div>
       )}
+      <CatchUp g={g} />
       {g.phase === "lobby" ? (
         <Lobby
           g={g}
@@ -206,7 +247,6 @@ export function GameTable({ code }: { code: string }) {
           busy={busy}
           online={online}
           reactions={reactions}
-          react={react}
         />
       ) : (
         <>
@@ -218,318 +258,325 @@ export function GameTable({ code }: { code: string }) {
           )}
           <div className="table-layout">
             <div className="table-main">
-              <SeatStrip
-                g={g}
-                online={online}
-                reactions={reactions}
-                onInspect={setInspectCity}
-              />
-              <div className="round-tracker">
-                <span>ROUND {String(g.round).padStart(2, "0")}</span>
-                <div className="role-track">
-                  {Array.from({ length: 8 }, (_, i) => i + 1).map((r) => (
-                    <span
-                      key={r}
-                      title={character(r).name}
-                      className={`${g.activeRole === r ? "current" : g.activeRole > r ? "done" : ""} ${g.killed === r ? "killed" : ""}`}
-                    >
-                      {r}
-                    </span>
-                  ))}
-                </div>
-                <span>{g.deckCount} CARDS IN DECK</span>
-              </div>
-              <section className="game-stage" aria-label="Game table">
-                {g.phase === "finished" ? (
-                  <>
-                    <div className="results-head">
-                      <Crown />
-                      <p className="eyebrow justify-center">
-                        THE REALM HAS SPOKEN
-                      </p>
-                      <h2>
-                        {g.winnerIds.includes(g.me)
-                          ? "The crown is yours."
-                          : `${g.players
-                              .filter((p) => g.winnerIds.includes(p.id))
-                              .map((p) => p.name)
-                              .join(
-                                " & ",
-                              )} ${g.winnerIds.length > 1 ? "share" : "takes"} the crown.`}
-                      </h2>
-                      <p>
-                        A game of {g.round} rounds. A city worth remembering.
-                      </p>
-                    </div>
-                    {[...g.players]
-                      .sort(
-                        (a, b) =>
-                          b.score.total - a.score.total ||
-                          b.score.districts - a.score.districts ||
-                          b.gold - a.gold,
-                      )
-                      .map((p, i) => (
-                        <div
-                          key={p.id}
-                          className={`result-row ${g.winnerIds.includes(p.id) ? "winner" : ""}`}
-                        >
-                          <span className="result-rank">{i + 1}</span>
-                          <span className="result-name">
-                            <strong>
-                              {p.name}
-                              {p.id === g.me ? " (you)" : ""}
-                            </strong>
-                            <small>
-                              {p.score.districts} districts +{" "}
-                              {p.score.diversity} diversity +{" "}
-                              {p.score.completion} completion +{" "}
-                              {p.score.special} special
-                            </small>
-                          </span>
-                          <span className="result-score">
-                            {p.score.total}
-                            <small>POINTS</small>
-                          </span>
-                        </div>
-                      ))}
-                    {g.series && g.series.games > 0 && (
-                      <p className="series-line">
-                        <Trophy size={13} />
-                        Before this game:{" "}
-                        {g.players
-                          .map((p) => `${p.name} ${g.series!.wins[p.id] ?? 0}`)
-                          .join(" · ")}
-                      </p>
-                    )}
-                    <div className="results-actions">
-                      {!g.archived && (
-                        <Button
-                          disabled={busy}
-                          onClick={() => send({ type: "rematch" })}
-                        >
-                          <RotateCcw />
-                          Play again, same table
-                        </Button>
+              <RoundTrack g={g} />
+              <div
+                className="living-table"
+                aria-label="Players around the table"
+              >
+                <SeatStrip
+                  g={g}
+                  online={online}
+                  reactions={reactions}
+                  onInspect={setInspectCity}
+                />
+                <section className="game-stage" aria-label="Game table">
+                  {g.phase === "finished" ? (
+                    <>
+                      <div className="results-head">
+                        <Crown />
+                        <p className="eyebrow justify-center">
+                          THE REALM HAS SPOKEN
+                        </p>
+                        <h2>
+                          {g.winnerIds.includes(g.me)
+                            ? "The crown is yours."
+                            : `${g.players
+                                .filter((p) => g.winnerIds.includes(p.id))
+                                .map((p) => p.name)
+                                .join(
+                                  " & ",
+                                )} ${g.winnerIds.length > 1 ? "share" : "takes"} the crown.`}
+                        </h2>
+                        <p>
+                          A game of {g.round} rounds. A city worth remembering.
+                        </p>
+                      </div>
+                      {[...g.players]
+                        .sort(
+                          (a, b) =>
+                            b.score.total - a.score.total ||
+                            b.score.districts - a.score.districts ||
+                            b.gold - a.gold,
+                        )
+                        .map((p, i) => (
+                          <div
+                            key={p.id}
+                            className={`result-row ${g.winnerIds.includes(p.id) ? "winner" : ""}`}
+                          >
+                            <span className="result-rank">{i + 1}</span>
+                            <span className="result-name">
+                              <strong>
+                                {p.name}
+                                {p.id === g.me ? " (you)" : ""}
+                              </strong>
+                              <small>
+                                {p.score.districts} districts +{" "}
+                                {p.score.diversity} diversity +{" "}
+                                {p.score.completion} completion +{" "}
+                                {p.score.special} special
+                              </small>
+                            </span>
+                            <span className="result-score">
+                              {p.score.total}
+                              <small>POINTS</small>
+                            </span>
+                          </div>
+                        ))}
+                      {g.series && g.series.games > 0 && (
+                        <p className="series-line">
+                          <Trophy size={13} />
+                          Before this game:{" "}
+                          {g.players
+                            .map(
+                              (p) => `${p.name} ${g.series!.wins[p.id] ?? 0}`,
+                            )
+                            .join(" · ")}
+                        </p>
                       )}
-                      {!g.archived && g.host === g.me && (
+                      <div className="results-actions">
+                        {!g.archived && (
+                          <Button
+                            disabled={busy}
+                            onClick={() => send({ type: "rematch" })}
+                          >
+                            <RotateCcw />
+                            Play again, same table
+                          </Button>
+                        )}
+                        {!g.archived && g.host === g.me && (
+                          <Button
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() => send({ type: "reopen" })}
+                          >
+                            <DoorOpen />
+                            Back to lobby so friends can join
+                          </Button>
+                        )}
+                        <Link href="/" className="inline-link">
+                          Back home
+                        </Link>
+                      </div>
+                    </>
+                  ) : g.phase === "draft" && mine ? (
+                    <>
+                      <div className="stage-heading">
+                        <div>
+                          <p className="eyebrow">
+                            {g.draftDiscard
+                              ? "A SECRET LEFT BEHIND"
+                              : "A NEW ROUND. A NEW IDENTITY."}
+                          </p>
+                          <h2>
+                            {g.draftDiscard
+                              ? "Set one character aside."
+                              : "Who will you be?"}
+                          </h2>
+                          <p>
+                            {g.draftDiscard
+                              ? "This character will be unavailable for the rest of the draft."
+                              : "Choose your character for this round. Your rivals won’t know until your turn."}
+                          </p>
+                        </div>
+                        <ShieldCheck
+                          size={22}
+                          className="text-[#92a57c] shrink-0"
+                        />
+                      </div>
+                      <div className="draft-context">
+                        <div>
+                          <span>
+                            <ShieldCheck size={11} /> YOUR PRIVATE HAND
+                          </span>
+                          <strong>
+                            <Coins size={13} />
+                            {me.gold} gold to work with
+                          </strong>
+                        </div>
+                        <div className="draft-hand-peek">
+                          {me.hand.map((card) => (
+                            <button
+                              key={card}
+                              onClick={() => setInspect(card)}
+                              aria-label={`Inspect ${district(card).name} in your private hand`}
+                            >
+                              <span
+                                style={{
+                                  backgroundImage: `url(/art/district-${district(card).art}.webp)`,
+                                }}
+                              >
+                                {district(card).cost}
+                              </span>
+                              <small>{district(card).name}</small>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="draft-cards">
+                        {g.available.map((r) => (
+                          <CharacterCard
+                            key={r}
+                            id={r}
+                            draft
+                            onClick={() => setRole(r)}
+                            selected={selectedRole === r}
+                            disabled={busy}
+                          />
+                        ))}
+                      </div>
+                      <div className="draft-confirm">
+                        <p>
+                          {selectedRole ? (
+                            <>
+                              <strong>{character(selectedRole).name}</strong>
+                              <small>
+                                {character(selectedRole).description}
+                              </small>
+                            </>
+                          ) : (
+                            "Select a character to make your move."
+                          )}
+                        </p>
+                        <Button
+                          disabled={busy || !selectedRole}
+                          onClick={async () => {
+                            if (
+                              selectedRole &&
+                              (await send({
+                                type: g.draftDiscard ? "discard-role" : "draft",
+                                role: selectedRole,
+                              }))
+                            )
+                              setRole(null);
+                          }}
+                        >
+                          {g.draftDiscard
+                            ? "Set character aside"
+                            : "Choose character"}
+                          <ArrowRight />
+                        </Button>
+                      </div>
+                    </>
+                  ) : g.choices.length > 0 && mine ? (
+                    <>
+                      <div className="stage-heading">
+                        <div>
+                          <p className="eyebrow">NEW POSSIBILITIES</p>
+                          <h2>A blueprint for your next move.</h2>
+                          <p>
+                            Keep {Math.min(g.keepCount, g.choices.length)}{" "}
+                            {g.keepCount === 1 ? "card" : "cards"}. The rest
+                            return to the bottom of the deck.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="draft-cards">
+                        {g.choices.map((c) => (
+                          <DistrictCard
+                            key={c}
+                            card={c}
+                            selected={choices.includes(c)}
+                            onClick={() =>
+                              setChoice(
+                                choices.includes(c)
+                                  ? choices.filter((x) => x !== c)
+                                  : g.keepCount === 1
+                                    ? [c]
+                                    : choices.length < g.keepCount
+                                      ? [...choices, c]
+                                      : choices,
+                              )
+                            }
+                          />
+                        ))}
+                      </div>
+                      <div className="draft-confirm">
+                        <p>
+                          {choices.length} of{" "}
+                          {Math.min(g.keepCount, g.choices.length)} selected
+                        </p>
+                        <Button
+                          disabled={
+                            busy ||
+                            choices.length !==
+                              Math.min(g.keepCount, g.choices.length)
+                          }
+                          onClick={async () => {
+                            if (await send({ type: "keep", cards: choices }))
+                              setChoice([]);
+                          }}
+                        >
+                          Keep selected cards
+                          <Check />
+                        </Button>
+                      </div>
+                    </>
+                  ) : g.phase === "recovery" && mine && g.recovery ? (
+                    <div className="recovery-choice">
+                      <div className="stage-heading">
+                        <div>
+                          <p className="eyebrow">
+                            YOUR GRAVEYARD · A SECOND CHANCE
+                          </p>
+                          <h2>Save a fallen district.</h2>
+                          <p>
+                            Pay one gold to put the destroyed{" "}
+                            {district(g.recovery.card).name} into your hand, or
+                            return it to the deck. This doesn’t build it in your
+                            city.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="recovery-card">
+                        <DistrictCard card={g.recovery.card} compact />
+                      </div>
+                      <div className="lesson-actions">
+                        <Button
+                          disabled={busy || me.gold < 1}
+                          onClick={() => send({ type: "recover" })}
+                        >
+                          <Coins />
+                          Recover for 1 gold
+                        </Button>
                         <Button
                           variant="outline"
                           disabled={busy}
-                          onClick={() => send({ type: "reopen" })}
+                          onClick={() => send({ type: "pass-recovery" })}
                         >
-                          <DoorOpen />
-                          Back to lobby so friends can join
+                          Let it go <ArrowRight />
                         </Button>
-                      )}
-                      <Link href="/" className="inline-link">
-                        Back home
-                      </Link>
-                    </div>
-                  </>
-                ) : g.phase === "draft" && mine ? (
-                  <>
-                    <div className="stage-heading">
-                      <div>
-                        <p className="eyebrow">
-                          {g.draftDiscard
-                            ? "A SECRET LEFT BEHIND"
-                            : "A NEW ROUND. A NEW IDENTITY."}
-                        </p>
-                        <h2>
-                          {g.draftDiscard
-                            ? "Set one character aside."
-                            : "Who will you be?"}
-                        </h2>
-                        <p>
-                          {g.draftDiscard
-                            ? "This character will be unavailable for the rest of the draft."
-                            : "Choose your character for this round. Your rivals won’t know until your turn."}
-                        </p>
-                      </div>
-                      <ShieldCheck
-                        size={22}
-                        className="text-[#92a57c] shrink-0"
-                      />
-                    </div>
-                    <div className="draft-cards">
-                      {g.available.map((r) => (
-                        <CharacterCard
-                          key={r}
-                          id={r}
-                          onClick={() => setRole(r)}
-                          selected={selectedRole === r}
-                          disabled={busy}
-                        />
-                      ))}
-                    </div>
-                    <div className="draft-confirm">
-                      <p>
-                        {selectedRole ? (
-                          <>
-                            <strong>{character(selectedRole).name}</strong>
-                            <small>{character(selectedRole).hint}</small>
-                          </>
-                        ) : (
-                          "Select a character to make your move."
-                        )}
-                      </p>
-                      <Button
-                        disabled={busy || !selectedRole}
-                        onClick={async () => {
-                          if (
-                            selectedRole &&
-                            (await send({
-                              type: g.draftDiscard ? "discard-role" : "draft",
-                              role: selectedRole,
-                            }))
-                          )
-                            setRole(null);
-                        }}
-                      >
-                        {g.draftDiscard
-                          ? "Set character aside"
-                          : "Choose character"}
-                        <ArrowRight />
-                      </Button>
-                    </div>
-                  </>
-                ) : g.choices.length > 0 && mine ? (
-                  <>
-                    <div className="stage-heading">
-                      <div>
-                        <p className="eyebrow">NEW POSSIBILITIES</p>
-                        <h2>A blueprint for your next move.</h2>
-                        <p>
-                          Keep {Math.min(g.keepCount, g.choices.length)}{" "}
-                          {g.keepCount === 1 ? "card" : "cards"}. The rest
-                          return to the bottom of the deck.
-                        </p>
                       </div>
                     </div>
-                    <div className="draft-cards">
-                      {g.choices.map((c) => (
-                        <DistrictCard
-                          key={c}
-                          card={c}
-                          selected={choices.includes(c)}
-                          onClick={() =>
-                            setChoice(
-                              choices.includes(c)
-                                ? choices.filter((x) => x !== c)
-                                : g.keepCount === 1
-                                  ? [c]
-                                  : choices.length < g.keepCount
-                                    ? [...choices, c]
-                                    : choices,
-                            )
-                          }
-                        />
-                      ))}
-                    </div>
-                    <div className="draft-confirm">
-                      <p>
-                        {choices.length} of{" "}
-                        {Math.min(g.keepCount, g.choices.length)} selected
-                      </p>
-                      <Button
-                        disabled={
-                          busy ||
-                          choices.length !==
-                            Math.min(g.keepCount, g.choices.length)
-                        }
-                        onClick={async () => {
-                          if (await send({ type: "keep", cards: choices }))
-                            setChoice([]);
-                        }}
-                      >
-                        Keep selected cards
-                        <Check />
-                      </Button>
-                    </div>
-                  </>
-                ) : g.phase === "turn" && mine ? (
-                  <YourTurn g={g} busy={busy} send={send} onPower={setPower} />
-                ) : (
-                  <Waiting g={g} online={online} />
-                )}
-              </section>
-              <section className="hand-section">
-                <div className="hand-heading">
-                  <h2>
-                    Your hand <span>{me.handCount}</span>
-                  </h2>
-                  <span>
-                    <ShieldCheck size={11} />
-                    Only you can see these
-                  </span>
-                </div>
-                <div className="hand-cards">
-                  {handSorted.map((c) => (
-                    <DistrictCard
-                      key={c}
-                      card={c}
-                      compact
-                      onClick={() => setInspect(c)}
-                      badge={handBadge(g, me, c)}
+                  ) : g.phase === "turn" && mine ? (
+                    <YourTurn
+                      g={g}
+                      busy={busy}
+                      send={send}
+                      onPower={setPower}
+                      onInspect={setInspect}
+                      planned={planned}
                     />
-                  ))}
-                </div>
-                {!me.hand.length && (
-                  <div className="hint-box">
-                    <Layers3 size={15} />
-                    Your hand is empty. Gather cards on your next turn to plan
-                    your next district.
-                  </div>
-                )}
-              </section>
-              <section className="city-section">
-                <div className="hand-heading">
-                  <h2>
-                    Your city <span>{me.city.length}</span>
-                  </h2>
-                  <div
-                    className="city-progress"
-                    aria-label={`${me.city.length} of ${g.target} districts built`}
-                  >
-                    {Array.from({ length: g.target }, (_, i) => (
-                      <span
-                        key={i}
-                        className={i < me.city.length ? "filled" : ""}
-                      />
-                    ))}
-                  </div>
-                </div>
-                <div className="city-grid">
-                  {me.city.map((c) => (
-                    <DistrictCard
-                      key={c}
-                      card={c}
-                      compact
-                      onClick={() => setInspect(c)}
-                    />
-                  ))}
-                  {me.city.length < g.target && (
-                    <div className="city-slot">
-                      <Castle size={22} strokeWidth={1} />
-                      <span>{g.target - me.city.length} TO COMPLETE</span>
-                    </div>
+                  ) : (
+                    <Waiting g={g} online={online} />
                   )}
-                </div>
-              </section>
-              <div className="mobile-journal">
-                <ReactionBar send={react} />
-                <Journal g={g} send={send} busy={busy} />
+                </section>
               </div>
+              <Workbench
+                g={g}
+                inspect={setInspect}
+                planned={planned}
+                plan={plan}
+              />
             </div>
             <aside className="table-aside">
               <ActionPanel g={g} busy={busy} send={send} onPower={setPower} />
-              <ReactionBar send={react} />
-              <Journal g={g} send={send} busy={busy} />
+              <Journal g={g} />
             </aside>
           </div>
         </>
       )}
       <Moments g={g} />
+      <FirstTurn open={learn} onOpenChange={setLearn} />
       <div className="sr-live" role="status" aria-live="polite">
         {mine ? "It is your turn." : `${active?.name} is playing.`}{" "}
         {g.log.at(-1)?.text}
@@ -541,6 +588,8 @@ export function GameTable({ code }: { code: string }) {
           busy={busy}
           send={send}
           close={() => setInspect(null)}
+          planned={planned === inspect}
+          onPlan={() => plan(planned === inspect ? null : inspect)}
         />
       )}{" "}
       {inspectCity && (
@@ -700,7 +749,7 @@ function Waiting({ g, online }: { g: GameView; online: Set<string> }) {
                 .join(
                   " & ",
                 )} will be called soon. Plan your build from your hand below.`
-            : "Watch their city. Tap any player above to see what they’ve built."}
+            : "Study their cities. Pin a district in your hand to prepare your next move."}
       </p>
       <div className="waiting-dots">
         <span />
@@ -714,25 +763,20 @@ function Waiting({ g, online }: { g: GameView; online: Set<string> }) {
 function buildsLeft(g: GameView) {
   return Math.max(0, (g.activeRole === 7 ? 3 : 1) - g.builds);
 }
-function handBadge(g: GameView, me: GameView["players"][number], c: string) {
-  if (me.city.some((x) => district(x).id === district(c).id))
-    return "Already in your city";
-  if (g.phase !== "turn" || g.active !== g.me || !g.gathered) return undefined;
-  if (!buildsLeft(g)) return undefined;
-  return district(c).cost <= me.gold
-    ? "Tap to build"
-    : `Need ${district(c).cost - me.gold} more gold`;
-}
 function YourTurn({
   g,
   busy,
   send,
   onPower,
+  onInspect,
+  planned,
 }: {
   g: GameView;
   busy: boolean;
   send: (a: GameAction) => Promise<boolean>;
   onPower: (kind: "ability" | "laboratory") => void;
+  onInspect: (card: string) => void;
+  planned: string | null;
 }) {
   const me = g.players.find((p) => p.id === g.me)!;
   const role = character(g.activeRole);
@@ -742,6 +786,22 @@ function YourTurn({
       district(c).cost <= me.gold &&
       !me.city.some((x) => district(x).id === district(c).id),
   );
+  affordable.sort(
+    (a, b) =>
+      (b === planned ? 1 : 0) - (a === planned ? 1 : 0) ||
+      district(a).cost - district(b).cost,
+  );
+  const drawCount = me.city.some((c) => district(c).id === "observatory")
+    ? 3
+    : 2;
+  const keepCount = me.city.some((c) => district(c).id === "library") ? 2 : 1;
+  const income = role.income
+    ? me.city.filter(
+        (c) =>
+          district(c).type === role.income ||
+          district(c).id === "school-of-magic",
+      ).length
+    : 0;
   const hasPower = [1, 2, 3, 8].includes(role.id) && !g.abilityUsed;
   return (
     <div className="your-turn">
@@ -773,7 +833,8 @@ function YourTurn({
                   onClick={() => send({ type: "draw" })}
                 >
                   <Layers3 />
-                  Draw 2 cards, keep 1
+                  Draw {Math.min(drawCount, g.deckCount)} cards, keep{" "}
+                  {Math.min(keepCount, g.deckCount)}
                 </Button>
               </div>
             )}
@@ -792,9 +853,36 @@ function YourTurn({
                 : !left
                   ? "You’ve built all you can this turn."
                   : affordable.length
-                    ? `You have ${me.gold} gold. Tap a card marked “Tap to build” in your hand below.`
+                    ? `You have ${me.gold} gold. Choose a district below, or save your gold.`
                     : `You have ${me.gold} gold. Nothing in your hand is affordable yet, so save up for next turn.`}
             </p>
+            {g.gathered && left > 0 && (
+              <div className="quick-builds">
+                {affordable.slice(0, 5).map((card) => (
+                  <button
+                    key={card}
+                    disabled={busy}
+                    onClick={() => onInspect(card)}
+                    className={card === planned ? "planned" : ""}
+                  >
+                    <span
+                      className="quick-build-art"
+                      style={{
+                        backgroundImage: `url(/art/district-${district(card).art}.webp)`,
+                      }}
+                    />
+                    <span>
+                      <strong>{district(card).name}</strong>
+                      <small>
+                        {card === planned ? "YOUR PLAN · " : ""}
+                        {district(card).cost} gold
+                      </small>
+                    </span>
+                    <ArrowRight size={14} />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </li>
         {hasPower && (
@@ -828,16 +916,55 @@ function YourTurn({
           <div>
             <b>End your turn</b>
             {g.gathered ? (
-              <Button disabled={busy} onClick={() => send({ type: "end" })}>
-                End my turn
-                <ArrowRight />
-              </Button>
+              <div className="end-turn-row">
+                <Button disabled={busy} onClick={() => send({ type: "end" })}>
+                  End my turn <ArrowRight />
+                </Button>
+                {hasPower && (
+                  <small className="unspent-power">
+                    Your character power is still available.
+                  </small>
+                )}
+              </div>
             ) : (
               <p>Available after you take an action.</p>
             )}
           </div>
         </li>
       </ol>
+      <div className="district-power-row">
+        {!g.incomeUsed && income > 0 && (
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => send({ type: "income" })}
+          >
+            <Coins /> Collect income (+{income})
+          </Button>
+        )}
+        {me.city.some((c) => district(c).id === "smithy") &&
+          !g.districtUsed.includes("smithy") && (
+            <Button
+              variant="outline"
+              disabled={busy || me.gold < 2 || g.deckCount === 0}
+              onClick={() => send({ type: "smithy" })}
+            >
+              <Anvil />
+              Smithy · 2 gold for 3 cards
+            </Button>
+          )}
+        {me.city.some((c) => district(c).id === "laboratory") &&
+          !g.districtUsed.includes("laboratory") && (
+            <Button
+              variant="outline"
+              disabled={busy || me.hand.length === 0}
+              onClick={() => onPower("laboratory")}
+            >
+              <FlaskConical />
+              Laboratory · discard for 1 gold
+            </Button>
+          )}
+      </div>
       <div className="hint-box">
         <Lightbulb size={15} />
         <span>{role.hint}</span>

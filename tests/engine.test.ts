@@ -11,9 +11,14 @@ import {
 } from "../src/lib/game/engine";
 import { DISTRICTS } from "../src/lib/game/catalog";
 import type { Game } from "../src/lib/game/types";
+import { APPRENTICE, createLesson, lessonMove } from "../src/lib/game/lesson";
+import { buildForecast, buildReason } from "../src/lib/game/planning";
 function setup(n = 4) {
   const g = createGame("TESTCODE", "host", "You");
   for (let i = 1; i < n; i++) g.players.push(makePlayer(`p${i}`, `Rival ${i}`));
+  g.players.forEach((p) => {
+    p.ready = true;
+  });
   applyAction(g, "host", { type: "start" });
   return g;
 }
@@ -40,6 +45,71 @@ function assertConservation(g: Game) {
   assert.equal(new Set(cards).size, cards.length);
   for (const p of g.players) assert.ok(p.gold >= 0);
 }
+test("ready checks require each human, allow undo, and reject checks during play", () => {
+  const g = createGame("READY", "host", "Host");
+  g.players.push(makePlayer("guest", "Guest"));
+  assert.throws(() => applyAction(g, "host", { type: "start" }), /ready/);
+  applyAction(g, "host", { type: "ready", ready: true });
+  assert.throws(() => applyAction(g, "host", { type: "start" }), /ready/);
+  applyAction(g, "guest", { type: "ready", ready: true });
+  applyAction(g, "guest", { type: "ready", ready: false });
+  assert.throws(() => applyAction(g, "host", { type: "start" }), /ready/);
+  applyAction(g, "guest", { type: "ready", ready: true });
+  applyAction(g, "host", { type: "start" });
+  assert.equal(g.phase, "draft");
+  assert.throws(
+    () => applyAction(g, "guest", { type: "ready", ready: false }),
+    /lobby/,
+  );
+});
+test("the lesson completes through both resource paths using real rules and preserves cards", () => {
+  for (const resource of ["gold", "draw"] as const) {
+    let g = createLesson();
+    assertConservation(g);
+    g = lessonMove(g, { type: "draft", role: 6 });
+    assert.equal(g.active, APPRENTICE);
+    assert.equal(g.activeRole, 6);
+    g = lessonMove(g, { type: resource });
+    if (resource === "draw")
+      g = lessonMove(g, { type: "keep", cards: [g.choices[0]] });
+    assert.equal(g.players[0].gold, resource === "gold" ? 5 : 3);
+    g = lessonMove(g, { type: "build", card: "market:0" });
+    assert.equal(score(g, g.players[0]).total, 2);
+    g = lessonMove(g, { type: "income" });
+    g = lessonMove(g, { type: "end" });
+    assertConservation(g);
+    assert.equal(g.round, 2);
+  }
+});
+test("planning previews match engine scoring, include bonuses, and never mutate the game", () => {
+  const g = turn(6);
+  g.gathered = true;
+  const p = g.players[0];
+  p.hand = ["university:0"];
+  p.gold = 8;
+  p.city = [
+    "tavern:0",
+    "market:0",
+    "temple:0",
+    "church:0",
+    "castle:0",
+    "manor:0",
+    "watchtower:0",
+  ];
+  p.builtAt = Object.fromEntries(p.city.map((c) => [c, g.round - 1]));
+  const view = viewFor(g, p.id);
+  const before = JSON.stringify(view);
+  const prediction = buildForecast(view, "university:0");
+  assert.equal(buildReason(view, "university:0"), null);
+  assert.equal(prediction.pointsAdded, 15); // 6 district + 2 unique + 3 colors + 4 first completion
+  assert.equal(prediction.finishesCity, true);
+  assert.equal(prediction.goldAfter, 2);
+  assert.equal(JSON.stringify(view), before);
+  const oldScore = score(g, p).total;
+  applyAction(g, p.id, { type: "build", card: "university:0" });
+  assert.equal(score(g, p).total - oldScore, prediction.pointsAdded);
+  assert.match(buildReason(viewFor(g, p.id), "university:0")!, /hand/);
+});
 test("setup deals four cards and two gold, with legal face-up removals", () => {
   for (const n of [2, 3, 4, 5, 6, 7]) {
     const g = setup(n);

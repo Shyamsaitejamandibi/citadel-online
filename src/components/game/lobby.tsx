@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import type { GameAction, GameView } from "@/lib/game/types";
 import { toast } from "sonner";
 import { Avatar } from "./avatar";
-import { ReactionBar } from "./seats";
 import type { LiveReaction } from "@/lib/game/use-table-life";
 
 export async function copyInvite(code: string) {
@@ -51,22 +50,23 @@ export function Lobby({
   send,
   online,
   reactions,
-  react,
 }: {
   g: GameView;
   busy: boolean;
   send: (a: GameAction) => Promise<boolean>;
   online: Set<string>;
   reactions: LiveReaction[];
-  react: (emoji: string) => void;
 }) {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   const host = g.me === g.host;
   const humans = g.players.filter((p) => !p.bot);
+  const me = g.players.find((p) => p.id === g.me)!;
+  const readyCount = humans.filter((p) => p.ready).length;
   // Testing aid: set NEXT_PUBLIC_ENABLE_BOTS=true locally to fill seats with bots.
   const testBots = process.env.NEXT_PUBLIC_ENABLE_BOTS === "true";
-  const canStart = testBots ? g.players.length >= 2 : humans.length >= 2;
+  const hasPlayers = testBots ? g.players.length >= 2 : humans.length >= 2;
+  const canStart = hasPlayers && humans.every((p) => p.ready);
   const empty = Math.max(0, 7 - g.players.length);
   const hostName = g.players.find((p) => p.id === g.host)?.name ?? "The host";
   const series = g.series;
@@ -160,9 +160,11 @@ export function Lobby({
                     <small>
                       {p.bot
                         ? "Test bot"
-                        : online.has(p.id)
-                          ? "Here and ready"
-                          : "Stepped away"}
+                        : p.ready
+                          ? "Ready to play ✓"
+                          : online.has(p.id)
+                            ? "Getting settled"
+                            : "Stepped away"}
                     </small>
                   </span>
                   {p.id === g.host ? (
@@ -203,9 +205,23 @@ export function Lobby({
             </div>
           </div>
           <div className="lobby-room-bottom">
-            <div className="lobby-reactions">
-              <span>BREAK THE ICE</span>
-              <ReactionBar send={react} />
+            <div className="lobby-ready-check">
+              <span>
+                <Check size={16} />
+                <strong>
+                  {readyCount}/{humans.length}
+                </strong>{" "}
+                players ready
+              </span>
+              <Button
+                variant={me.ready ? "outline" : "default"}
+                disabled={busy}
+                aria-pressed={!!me.ready}
+                onClick={() => send({ type: "ready", ready: !me.ready })}
+              >
+                <Check size={16} />
+                {me.ready ? "Ready · click to undo" : "I’m ready to play"}
+              </Button>
             </div>
             {testBots && host && g.players.length < 7 && (
               <Button
@@ -260,10 +276,18 @@ export function Lobby({
                   >
                     {canStart
                       ? `Start the game with ${g.players.length}`
-                      : "Waiting for your first guest"}
+                      : hasPlayers
+                        ? "Waiting for everyone to be ready"
+                        : "Waiting for your first guest"}
                     <ArrowRight size={17} />
                   </Button>
-                  {!canStart && <p>One friend is all it takes to begin.</p>}
+                  {!canStart && (
+                    <p>
+                      {hasPlayers
+                        ? "Each player can mark themselves ready above."
+                        : "One friend is all it takes to begin."}
+                    </p>
+                  )}
                 </>
               ) : (
                 <>

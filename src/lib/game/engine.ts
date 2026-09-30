@@ -95,7 +95,10 @@ const has = (p: Player, id: string) =>
 function draw(g: Game, n: number) {
   return g.deck.splice(0, n);
 }
-export function score(g: Game, p: Player): Score {
+export function score(
+  g: Pick<Game, "round" | "target" | "firstComplete">,
+  p: Pick<Player, "city" | "builtAt" | "id">,
+): Score {
   const districts = p.city.reduce((sum, c) => sum + district(c).cost, 0);
   const colors = new Set(p.city.map((c) => district(c).type));
   const wild = p.city.some(
@@ -346,6 +349,15 @@ const BOT_NAMES = [
 export function applyAction(g: Game, id: string, a: GameAction) {
   const p = g.players.find((p) => p.id === id);
   requireRule(p, "Join this table before playing.");
+  if (a.type === "ready") {
+    requireRule(
+      g.phase === "lobby" && !p.bot,
+      "Ready checks happen in the lobby.",
+    );
+    requireRule(typeof a.ready === "boolean", "Choose whether you are ready.");
+    p.ready = a.ready;
+    return;
+  }
   if (a.type === "chat") {
     requireRule(
       typeof a.text === "string" &&
@@ -426,10 +438,18 @@ export function applyAction(g: Game, id: string, a: GameAction) {
     }
     if (a.type === "reopen") {
       g.phase = "lobby";
+      g.players.forEach((player) => {
+        player.ready = false;
+      });
       g.log = [];
       log(g, `${p.name} opened the table for the next game.`);
       return;
     }
+    if (a.type === "start")
+      requireRule(
+        g.players.every((player) => player.bot || player.ready),
+        "Everyone needs to mark themselves ready first.",
+      );
     start(g);
     return;
   }

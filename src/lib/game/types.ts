@@ -2,6 +2,7 @@ export type Player = {
   id: string;
   name: string;
   bot: boolean;
+  ready?: boolean;
   gold: number;
   hand: string[];
   city: string[];
@@ -12,6 +13,7 @@ export type Player = {
 export type GameAction = {
   type:
     | "start"
+    | "ready"
     | "draft"
     | "discard-role"
     | "gold"
@@ -38,6 +40,7 @@ export type GameAction = {
   cards?: string[];
   target?: string;
   text?: string;
+  ready?: boolean;
 };
 // A dramatic beat the table should play out for everyone (reveals, murders…).
 export type Moment =

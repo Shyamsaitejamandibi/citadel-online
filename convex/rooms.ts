@@ -25,6 +25,7 @@ const actionValidator = v.object({
   type: v.union(
     v.literal("join"),
     v.literal("start"),
+    v.literal("ready"),
     v.literal("draft"),
     v.literal("discard-role"),
     v.literal("gold"),
@@ -53,6 +54,7 @@ const actionValidator = v.object({
   cards: v.optional(v.array(v.string())),
   target: v.optional(v.string()),
   text: v.optional(v.string()),
+  ready: v.optional(v.boolean()),
   version: v.optional(v.number()),
 });
 
@@ -274,7 +276,12 @@ export const act = mutation({
           throw new Error("Write a message of up to 240 characters.");
         if (g.players.find((p) => p.id === id)?.bot)
           throw new Error("This seat is controlled by a computer rival.");
-        if (version !== undefined && version !== g.version && type !== "chat")
+        if (
+          version !== undefined &&
+          version !== g.version &&
+          type !== "chat" &&
+          type !== "ready"
+        )
           throw new Error(
             "The table has moved on. Please try your action again.",
           );

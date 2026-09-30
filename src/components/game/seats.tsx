@@ -1,10 +1,11 @@
 "use client";
 import { Castle, Coins, Crown, Layers3, Trophy } from "lucide-react";
-import { character } from "@/lib/game/catalog";
+import { character, district } from "@/lib/game/catalog";
 import { REACTIONS } from "@/lib/game/reactions";
 import type { GameView, PublicPlayer } from "@/lib/game/types";
 import { useNow, type LiveReaction } from "@/lib/game/use-table-life";
 import { Avatar } from "./avatar";
+import { CityColors } from "./workbench";
 
 export function clock(ms: number) {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -51,18 +52,28 @@ export function SeatStrip({
   onInspect: (id: string) => void;
 }) {
   const now = useNow(1000);
+  const rivals = g.players.filter((p) => p.id !== g.me);
+  const players = [...rivals, ...g.players.filter((p) => p.id === g.me)];
+  const positions = [
+    "north",
+    "north-west",
+    "north-east",
+    "west",
+    "east",
+    "south-east",
+  ];
   return (
     <div
       className="player-strip"
       style={{ "--players": g.players.length } as React.CSSProperties}
     >
-      {g.players.map((p) => {
+      {players.map((p, index) => {
         const s = status(g, p, now);
         const wins = g.series?.wins[p.id] ?? 0;
         return (
           <button
             key={p.id}
-            className={`player-seat ${s.live && g.phase !== "finished" ? "current" : ""} ${!online.has(p.id) && !p.bot ? "is-away" : ""}`}
+            className={`player-seat seat-${p.id === g.me ? "south" : positions[index]} ${p.id === g.me ? "your-seat" : ""} ${s.live && g.phase !== "finished" ? "current" : ""} ${!online.has(p.id) && !p.bot ? "is-away" : ""}`}
             onClick={() => onInspect(p.id)}
             aria-label={`Inspect ${p.name}’s city`}
           >
@@ -78,10 +89,30 @@ export function SeatStrip({
                 id={p.id}
                 name={p.name}
                 online={p.bot ? undefined : online.has(p.id)}
-                size={30}
+                size={40}
               />
               <span>{p.id === g.me ? `${p.name} (you)` : p.name}</span>
               {p.id === g.crown && <Crown size={13} aria-label="Crown" />}
+            </div>
+            <div className="seat-city" aria-hidden="true">
+              {p.city.length ? (
+                p.city
+                  .slice(-5)
+                  .map((card) => (
+                    <span
+                      key={card}
+                      className={`mini-district color-${district(card).type}`}
+                      title={district(card).name}
+                      style={{
+                        backgroundImage: `url(/art/district-${district(card).art}.webp)`,
+                      }}
+                    />
+                  ))
+              ) : (
+                <span className="unbuilt-city">
+                  <Castle size={15} strokeWidth={1.2} /> A city to come
+                </span>
+              )}
             </div>
             <div className="seat-stats">
               <span title="Gold">
@@ -102,7 +133,12 @@ export function SeatStrip({
                   {wins}
                 </span>
               )}
+              <span title="Current score">
+                <Trophy size={11} />
+                {p.score.total}
+              </span>
             </div>
+            <CityColors player={p} />
             <span className={`seat-role ${s.live ? "live" : ""}`}>
               {!online.has(p.id) && !p.bot && p.id !== g.me
                 ? "Away · " + s.text

@@ -22,6 +22,7 @@ import {
   Check,
   Castle,
   X,
+  GraduationCap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { CharacterCard } from "@/components/game/character-card";
 import { toast } from "sonner";
 import { usePreference } from "@/lib/preferences";
+import { FirstTurn } from "@/components/game/first-turn";
 export function Home() {
   const router = useRouter();
   const [mode, setMode] = useState<"friends" | "join" | null>(null);
@@ -47,6 +49,8 @@ export function Home() {
   const createRoom = useMutation(api.rooms.create);
   const [selectedRole, setSelectedRole] = useState<number | null>(null);
   const [showAllGames, setShowAllGames] = useState(false);
+  const [learn, setLearn] = useState(false);
+  const activeTable = recent.find((g) => g.phase !== "finished");
   const finished = recent.filter((g) => g.phase === "finished");
   useEffect(() => {
     if (mode) {
@@ -85,7 +89,22 @@ export function Home() {
     }
   }
   return (
-    <main className="home-content">
+    <main className="home-content home-v2">
+      {activeTable && (
+        <Link className="resume-table" href={`/play/${activeTable.code}`}>
+          <span className="live-spark" />
+          <span>
+            <strong>Your table is still here.</strong> {activeTable.name} ·{" "}
+            {activeTable.players} players
+            {activeTable.round > 0
+              ? ` · Round ${activeTable.round}`
+              : " · Gathering"}
+          </span>
+          <span>
+            Take your seat <ArrowRight size={15} />
+          </span>
+        </Link>
+      )}
       <div className="page-heading">
         <div>
           <p className="eyebrow">
@@ -113,20 +132,34 @@ export function Home() {
             WELCOME TO CITADELS
           </span>
           <h2>
-            Every great city
+            Your people. One table.
             <br />
-            has a <em>hidden story.</em>
+            <em>Endless intrigue.</em>
           </h2>
           <p>
-            A game of cunning characters, magnificent cities,
-            <br className="desktop-break" />
-            and the friends you probably shouldn’t trust.
+            Feel the cards. Read the room. Build a city.
+            <br className="desktop-break" />A proper game night, wherever your
+            people are.
           </p>
-          <Button className="gold-button" onClick={() => setMode("friends")}>
-            <Swords size={17} />
-            Let’s play
-            <ArrowRight size={17} />
-          </Button>
+          <div className="hero-play-actions">
+            <Button className="gold-button" onClick={() => setMode("friends")}>
+              <Swords size={17} />
+              Let’s play
+              <ArrowRight size={17} />
+            </Button>
+            <Button
+              className="hero-join"
+              variant="outline"
+              onClick={() => setMode("join")}
+            >
+              <Link2 size={16} />
+              Join a table
+            </Button>
+          </div>
+          <button className="hero-lesson" onClick={() => setLearn(true)}>
+            <GraduationCap size={17} />
+            First time? Play a guided turn <ArrowRight size={14} />
+          </button>
           <div className="hero-meta">
             <span>
               <Users size={14} />
@@ -139,6 +172,21 @@ export function Home() {
             </span>
             <i />
             <span>No downloads. Just play.</span>
+          </div>
+        </div>
+        <div className="hero-table-preview" aria-hidden="true">
+          <div className="preview-felt">
+            <Crown size={28} strokeWidth={1.2} />
+            <span>THE EVENING IS YOURS</span>
+          </div>
+          <div className="preview-character preview-one" />
+          <div className="preview-character preview-two" />
+          <div className="preview-character preview-three" />
+          <span className="preview-token token-one">2</span>
+          <span className="preview-token token-two">3</span>
+          <div className="preview-caption">
+            <span className="live-spark" />
+            REAL PEOPLE. REAL RIVALRIES.
           </div>
         </div>
         <div className="hero-corner">
@@ -191,27 +239,30 @@ export function Home() {
             </span>
             <span className="option-tag">THE PARTY IS ALREADY STARTING</span>
           </button>
-          <Link href="/how-to-play" className="play-option learn-option">
+          <button
+            onClick={() => setLearn(true)}
+            className="play-option learn-option"
+          >
             <span className="option-icon blue">
               <BookOpen size={25} strokeWidth={1.5} />
             </span>
             <span className="option-title">
-              New to the city?
+              Learn by playing
               <ArrowUpRight size={19} />
             </span>
             <p>
-              A little guidance goes a long way.
+              Your first district in two minutes.
               <br />
               We’ll show you around.
             </p>
             <span className="option-link">
-              Learn to play
+              Try your first turn
               <ArrowRight size={15} />
             </span>
             <span className="option-tag">
               EASY TO LEARN. A LIFETIME TO MASTER.
             </span>
-          </Link>
+          </button>
         </div>
         {mode && (
           <section
@@ -432,6 +483,7 @@ export function Home() {
         <Sparkles size={14} />
         <span>Some build cities. Others build legends. Which will you be?</span>
       </div>
+      <FirstTurn open={learn} onOpenChange={setLearn} />
       <Dialog
         open={selectedRole !== null}
         onOpenChange={(open) => {

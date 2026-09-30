@@ -5,6 +5,7 @@ import { Shell } from "@/components/shell";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "sonner";
 import "./globals.css";
+import "./game-experience.css";
 const sans = DM_Sans({ variable: "--font-dm-sans", subsets: ["latin"] });
 const serif = Cormorant_Garamond({
   variable: "--font-cormorant",

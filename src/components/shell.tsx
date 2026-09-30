@@ -36,7 +36,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
     { href: "/how-to-play", label: "How to play", icon: BookOpen },
   ];
   return (
-    <div className="app-shell">
+    <div
+      className={`app-shell ${path.startsWith("/play/") ? "playing-shell" : ""}`}
+    >
       <header className="hub-header">
         <Link href="/" className="brand" aria-label="Citadels home">
           <div className="brand-mark">

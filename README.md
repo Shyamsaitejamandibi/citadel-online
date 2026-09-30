@@ -23,12 +23,14 @@ npm run dev -- --port 3002
 ## Play
 
 - **Play with friends:** create a private table, share its link or eight-character code, and start once at least two people are seated (2–7 players, 7- or 8-district finish line). Only real players: there are no computer rivals.
-- **Feel the table:** setup, invitations, seats, choices, hand, city, and game activity live on one tabletop scene. Online/away dots, a “thinking…” timer, floating emoji reactions, and full-screen game moments bring the players together.
+- **Feel the table:** setup, invitations, seats, choices, hand, city, and game activity live on one tabletop scene. Online/away dots, a “thinking…” timer, public city miniatures, illustrated calling order, and full-screen game moments bring the players together.
 - **Player aid:** open the two-sided reference card (turn summary and the eight characters in calling order) whenever you need it. The active turn walks you through each step.
 - **Game after game:** “Play again” restarts with the same people at the same link, with a running win tally; the host can also reopen the lobby so new friends can join.
 - **Resume:** revisit the room link in the same browser. The game is stored in Convex and your seat is recovered through a private session token kept in this browser's local storage.
 - **Disconnected player:** once a player has been away for a minute, the host can put their seat on autopilot from table settings so the game can finish.
-- **Table talk:** room chat sits beside the game journal; on phones it appears below your city.
+- **Play, prepare, repeat:** mark yourself ready in the lobby, follow the illustrated calling order, inspect rival cities, and pin your next build privately. The workbench sorts your hand and previews gold and points before building.
+- **Learn by playing:** try a guided first turn from home or inside a room; its moves use the real rules engine and don’t create an online table.
+- **Stay focused:** a compact room header, optional focus mode, and a game-only journal keep attention on play. Use your preferred external app for conversation.
 - **Learn:** searchable character/district collection, field guide, contextual abilities, build validation, and automatic scoring.
 
 For different human players on one machine, use separate browser profiles or private windows. Tabs in the same browser share the same seat. For friends elsewhere, run the app on a reachable host with HTTPS; a localhost invite is only accessible on your own computer.
@@ -50,7 +52,7 @@ This targets the **classic base game**, not later expansion character sets. The 
 ## Deploy to Vercel
 
 1. In the [Convex dashboard](https://dashboard.convex.dev), open the project → **Production** deployment → **Settings → Deploy keys**, and generate a **production deploy key**.
-2. In Vercel → Project **citadel-online** → **Settings → Environment Variables**, add `CONVEX_DEPLOY_KEY` with that key for the **Production** environment. (For preview deployments, add a separate *preview* deploy key scoped to **Preview**.)
+2. In Vercel → Project **citadel-online** → **Settings → Environment Variables**, add `CONVEX_DEPLOY_KEY` with that key for the **Production** environment. (For preview deployments, add a separate _preview_ deploy key scoped to **Preview**.)
 3. Redeploy. `vercel.json` sets the build command to `npx convex deploy --cmd 'npm run build'`, which pushes `convex/` to your production deployment and injects `NEXT_PUBLIC_CONVEX_URL` into the Next.js build.
 
 Any host works the same way: the Next.js app is stateless, so it runs fine on serverless or multiple instances. For Docker, pass `NEXT_PUBLIC_CONVEX_URL` at build time (`NEXT_PUBLIC_CONVEX_URL=… docker compose up --build -d`) after running `npx convex deploy`.
@@ -64,7 +66,7 @@ Any host works the same way: the Next.js app is stateless, so it runs fine on se
 - `convex/social.ts`: presence heartbeats and short-lived emoji reactions.
 - `src/lib/session.ts`: private per-browser session token.
 - `src/lib/game/use-game.ts`: live Convex subscription, actions and connection status.
-- `src/components/game/`: table, guided actions, draft, card inspection, powers, chat, lobby and results.
+- `src/components/game/`: table, guided actions, draft, card inspection, powers, private planning, practice, lobby and results.
 
 The server validates every move. Opponent hands, uncalled roles, deck order and private draw choices are removed **before** responses reach the browser. Public player IDs are SHA-256 hashes of private session tokens. Convex mutations are serializable transactions, and state versions reject conflicting moves. Autopilot seats use their own hand and public city information to choose actions; hidden opponent characters are not used to select assassination or theft targets.
 
@@ -87,3 +89,5 @@ TEST_BASE_URL=http://localhost:3002 npm run test:e2e
 ```
 
 Tests cover complete simulations for every table size, individual power interactions, card conservation, hidden information, browser play, saved games, multiplayer synchronization, stale actions and mobile overflow. `artifacts/` contains browser screenshots from visual verification. Artwork provenance and design notes are in `docs/`.
+
+The living-table refactor and research references are documented in [docs/EXPERIENCE.md](docs/EXPERIENCE.md).

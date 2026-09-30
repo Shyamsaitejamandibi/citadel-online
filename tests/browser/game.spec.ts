@@ -53,6 +53,15 @@ async function seatTable(browser: Browser) {
     h.locator(".lobby-seat").filter({ hasText: "Guest ruler" }),
   ).toBeVisible();
   await expect(h.locator(".lobby-room .lobby-invitation")).toBeVisible();
+  await f
+    .getByRole("button", { name: "I’m ready to play", exact: true })
+    .click();
+  await h
+    .getByRole("button", { name: "I’m ready to play", exact: true })
+    .click();
+  await expect(
+    h.getByRole("button", { name: "Start the game with 2", exact: true }),
+  ).toBeEnabled();
   return {
     h,
     f,
@@ -90,7 +99,9 @@ test("home, character library, search and mobile fit", async ({ page }) => {
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: /Every great city has a hidden story/ }),
+    page.getByRole("heading", {
+      name: /Your people. One table. Endless intrigue/,
+    }),
   ).toBeVisible();
   await page.getByRole("button", { name: /Play with friends/ }).click();
   await expect(page.locator(".play-section #table-setup")).toBeVisible();
@@ -208,8 +219,7 @@ test("two independent browsers share a private table without leaking secrets", a
     await expect(h.locator(".lobby-seat .player-avatar i.online")).toHaveCount(
       2,
     );
-    await f.getByRole("button", { name: "React 👏" }).click();
-    await expect(h.locator(".seat-reactions i")).toHaveText("👏");
+    await expect(h.locator(".lobby-ready-check")).toContainText("2/2");
     await h.getByRole("button", { name: "Start the game with 2" }).click();
     await expect(
       h.getByRole("heading", { name: "Who will you be?" }),
@@ -259,4 +269,170 @@ test("two independent browsers share a private table without leaking secrets", a
   } finally {
     await close();
   }
+});
+
+test("guided practice is playable on mobile and never creates an online table", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "First time? Play a guided turn" })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText(
+    "A new round. A secret identity.",
+  );
+  await page
+    .getByRole("button", { name: "Choose the Merchant", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Draw 2 cards, keep 1", exact: true })
+    .click();
+  await page.locator(".lesson-cards .district-card").first().click();
+  await page
+    .getByRole("button", { name: "Keep selected card", exact: true })
+    .click();
+  await page
+    .locator(".lesson-cards")
+    .getByRole("button", { name: /^Market,/ })
+    .click();
+  await page
+    .getByRole("button", { name: "Build Market for 2 gold", exact: true })
+    .click();
+  await expect(page.locator(".lesson-wallet")).toContainText("2 points");
+  await page
+    .getByRole("button", { name: "Collect trade income", exact: true })
+    .click();
+  await page.getByRole("button", { name: "End my turn", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText(
+    "You’ve built more than a city.",
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.getByRole("button", { name: "I’m ready for the table" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/$/);
+});
+
+test("ready checks synchronize and private plans survive reload without reaching rivals", async ({
+  browser,
+}) => {
+  const { h, f, code, close } = await seatTable(browser);
+  try {
+    const initial = await viewOf(h, code);
+    await f
+      .getByRole("button", { name: "Ready · click to undo", exact: true })
+      .click();
+    await expect(
+      h.getByRole("button", { name: "Waiting for everyone to be ready" }),
+    ).toBeDisabled();
+    await expect(actAs(h, code, { type: "start" })).rejects.toThrow(/ready/);
+    // Readiness is independent of the move version, so simultaneous checks work.
+    await actAs(f, code, {
+      type: "ready",
+      ready: true,
+      version: initial.version,
+    });
+    await h.getByRole("button", { name: "Start the game with 2" }).click();
+    await expect(h.locator(".hand-cards .plan-pin").first()).toBeVisible();
+    const button = h.locator(".hand-cards .plan-pin").first();
+    const label = await button.getAttribute("aria-label");
+    const districtName = label!.replace(/^Plan /, "");
+    await button.click();
+    await expect(h.locator(".private-plan")).toContainText(districtName);
+    await expect(f.locator(".private-plan")).toContainText("Pin a card");
+    const guestView = await viewOf(f, code);
+    expect(JSON.stringify(guestView)).not.toContain("citadel-plan");
+    await h.reload();
+    await expect(h.locator(".private-plan")).toContainText(districtName);
+    await h.getByRole("button", { name: "Focus on the game" }).click();
+    await expect(h.locator(".table-aside")).toBeHidden();
+    await h.setViewportSize({ width: 390, height: 844 });
+    await expect(h.locator(".table-aside")).toBeHidden();
+    await h.getByRole("button", { name: "Focus on the game" }).click();
+    await expect(h.locator(".table-aside")).toBeVisible();
+    await expect(h.getByRole("log", { name: "Game journal" })).toBeVisible();
+    const workbench = await h.locator(".workbench").boundingBox();
+    const journal = await h.locator(".game-journal").boundingBox();
+    expect(journal!.y).toBeGreaterThan(workbench!.y + workbench!.height);
+    await expect(h.getByRole("button", { name: "Table talk" })).toHaveCount(0);
+    await h.getByRole("button", { name: "Clear planned district" }).click();
+    await expect(h.locator(".private-plan")).toContainText("Pin a card");
+  } finally {
+    await close();
+  }
+});
+
+test("seven-player tabletop fits desktop and mobile without hiding seats or legal draft cards", async ({
+  page,
+}) => {
+  const tokens = Array.from({ length: 7 }, () => crypto.randomUUID());
+  const { code } = await convex.mutation(api.rooms.create, {
+    token: tokens[0],
+    name: "Seven-seat host",
+  });
+  for (let i = 1; i < tokens.length; i++)
+    await convex.mutation(api.rooms.act, {
+      token: tokens[i],
+      code,
+      action: { type: "join", name: `Rival ${i}` },
+    });
+  for (const token of tokens)
+    await convex.mutation(api.rooms.act, {
+      token,
+      code,
+      action: { type: "ready", ready: true },
+    });
+  await convex.mutation(api.rooms.act, {
+    token: tokens[0],
+    code,
+    action: { type: "start" },
+  });
+  await page.addInitScript((token) => {
+    localStorage.setItem("citadel-session", token);
+    localStorage.setItem("citadel-moments", "off");
+  }, tokens[0]);
+  await page.goto(`/play/${code}`);
+  await expect(page.locator(".living-table .player-seat")).toHaveCount(7);
+  await expect(page.locator(".draft-cards .character-card")).toHaveCount(7);
+  for (const seat of await page.locator(".living-table .player-seat").all())
+    await expect(seat).toBeVisible();
+  const overlaps = await page.evaluate(() => {
+    const stage = document
+      .querySelector(".game-stage")!
+      .getBoundingClientRect();
+    return [...document.querySelectorAll(".player-seat")].filter((seat) => {
+      const r = seat.getBoundingClientRect();
+      return (
+        r.left < stage.right &&
+        r.right > stage.left &&
+        r.top < stage.bottom &&
+        r.bottom > stage.top
+      );
+    }).length;
+  });
+  expect(overlaps).toBe(0);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: "artifacts/table-seven-desktop.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await expect(page.locator(".draft-cards .character-card")).toHaveCount(7);
+  await page.screenshot({
+    path: "artifacts/table-seven-mobile.png",
+    fullPage: true,
+  });
 });

@@ -1,98 +1,63 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Send } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import type { GameView, GameAction } from "@/lib/game/types";
-export function Journal({
-  g,
-  send,
-  busy,
-}: {
-  g: GameView;
-  send: (a: GameAction) => Promise<boolean>;
-  busy: boolean;
-}) {
-  const [tab, setTab] = useState("journal");
-  const [message, setMessage] = useState("");
+import { Castle, ChevronDown, ScrollText, Sparkles } from "lucide-react";
+import type { GameView } from "@/lib/game/types";
+
+export function Journal({ g }: { g: GameView }) {
+  const [expanded, setExpanded] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const entries = g.log.filter((l) => l.kind !== "chat");
   useEffect(() => {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
-  }, [g.log.length, tab]);
+  }, [g.log.length, expanded]);
   return (
-    <section className="journal">
-      <div className="journal-tabs">
-        <button
-          className={tab === "journal" ? "active" : ""}
-          onClick={() => setTab("journal")}
-        >
-          Game journal
-        </button>
-        <button
-          className={tab === "chat" ? "active" : ""}
-          onClick={() => setTab("chat")}
-        >
-          Table talk
-        </button>
-      </div>
-      <div
-        className="journal-entries"
-        ref={ref}
-        aria-label={tab === "journal" ? "Game journal" : "Table chat"}
+    <section className="journal game-journal">
+      <button
+        className="journal-heading"
+        onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+        aria-controls={`journal-${g.code}`}
       >
-        {tab === "journal" ? (
-          g.log
-            .filter((l) => l.kind !== "chat")
-            .map((l, i, all) => (
-              <div key={l.id} className={`journal-entry kind-${l.kind}`}>
-                {(!i || all[i - 1].round !== l.round) && (
-                  <span className="log-round">ROUND {l.round}</span>
-                )}
-                {l.text}
-              </div>
-            ))
-        ) : g.log.filter((l) => l.kind === "chat").length ? (
-          g.log
-            .filter((l) => l.kind === "chat")
-            .map((l) => (
-              <div className="chat-message" key={l.id}>
-                <strong>
-                  {g.players.find((p) => p.id === l.player)?.name}
-                </strong>
-                {l.text}
-              </div>
-            ))
-        ) : (
-          <p className="text-[10px] leading-6 text-muted-foreground">
-            A little table talk makes a better rivalry. Say hello to your fellow
-            city builders.
+        <span>
+          <ScrollText size={16} /> The story so far
+        </span>
+        <ChevronDown size={15} className={expanded ? "expanded" : ""} />
+      </button>
+      <div
+        className={`journal-entries ${expanded ? "expanded" : ""}`}
+        ref={ref}
+        id={`journal-${g.code}`}
+        aria-label="Game journal"
+        role="log"
+        aria-live="off"
+      >
+        {entries.slice(-40).map((l, i, all) => (
+          <div key={l.id} className={`journal-entry kind-${l.kind}`}>
+            {(!i || all[i - 1].round !== l.round) && (
+              <span className="log-round">
+                {l.round
+                  ? `ROUND ${String(l.round).padStart(2, "0")}`
+                  : "THE GATHERING"}
+              </span>
+            )}
+            <div className="journal-line">
+              {l.kind === "build" ? (
+                <Castle size={13} />
+              ) : l.kind === "power" ? (
+                <Sparkles size={13} />
+              ) : (
+                <span className="journal-dot" />
+              )}
+              <span>{l.text}</span>
+            </div>
+          </div>
+        ))}
+        {!entries.length && (
+          <p className="journal-empty">
+            Every choice leaves a mark. Your game’s story will unfold here.
           </p>
         )}
       </div>
-      {tab === "chat" && (
-        <form
-          className="chat-form"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            if (await send({ type: "chat", text: message })) setMessage("");
-          }}
-        >
-          <Input
-            aria-label="Message to the table"
-            placeholder="A word to the table…"
-            value={message}
-            maxLength={240}
-            onChange={(e) => setMessage(e.target.value)}
-          />
-          <Button
-            type="submit"
-            disabled={busy || !message.trim()}
-            aria-label="Send message"
-          >
-            <Send size={14} />
-          </Button>
-        </form>
-      )}
     </section>
   );
 }

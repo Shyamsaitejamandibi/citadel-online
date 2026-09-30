@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Coins, ArrowRight, Check, Sparkles } from "lucide-react";
+import { Coins, ArrowRight, Check, Sparkles, Pin, Trophy } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import { CHARACTERS, character, district } from "@/lib/game/catalog";
 import type { GameAction, GameView } from "@/lib/game/types";
 import { DistrictCard } from "./district-card";
 import { ROLE_ICONS } from "./character-card";
+import { buildForecast, buildReason } from "@/lib/game/planning";
 export function PowerDialog({
   g,
   kind,
@@ -222,30 +223,22 @@ export function InspectDialog({
   busy,
   send,
   close,
+  planned,
+  onPlan,
 }: {
   g: GameView;
   card: string;
   busy: boolean;
   send: (a: GameAction) => Promise<boolean>;
   close: () => void;
+  planned?: boolean;
+  onPlan?: () => void;
 }) {
   const p = g.players.find((p) => p.id === g.me)!;
   const inHand = p.hand.includes(card);
   const d = district(card);
-  const reason =
-    g.phase !== "turn" || g.active !== g.me
-      ? "Wait until your turn to build."
-      : !g.gathered
-        ? "Gather gold or cards before building."
-        : g.choices.length
-          ? "Choose your drawn cards first."
-          : g.builds >= (g.activeRole === 7 ? 3 : 1)
-            ? "You’ve reached your building limit this turn."
-            : p.city.some((c) => district(c).id === d.id)
-              ? "Your city already has this district."
-              : p.gold < d.cost
-                ? `You need ${d.cost - p.gold} more gold to build this district.`
-                : null;
+  const reason = buildReason(g, card);
+  const forecast = buildForecast(g, card);
   return (
     <Dialog
       open
@@ -269,6 +262,35 @@ export function InspectDialog({
         </div>
         {inHand && (
           <>
+            <div className="build-forecast">
+              <span>
+                <Coins size={16} />
+                <strong>
+                  {p.gold} − {d.cost} ={" "}
+                  {forecast.goldAfter >= 0
+                    ? forecast.goldAfter
+                    : `need ${-forecast.goldAfter}`}
+                </strong>
+                <small>
+                  {forecast.goldAfter >= 0
+                    ? "GOLD LEFT AFTER BUILDING"
+                    : "MORE GOLD REQUIRED"}
+                </small>
+              </span>
+              <span>
+                <Trophy size={16} />
+                <strong>+{forecast.pointsAdded}</strong>
+                <small>
+                  {forecast.duplicate
+                    ? "ALREADY IN YOUR CITY"
+                    : forecast.finishesCity
+                      ? "POINTS · FINAL ROUND"
+                      : forecast.addsColor
+                        ? "POINTS · NEW CITY COLOR"
+                        : "POINTS TO YOUR CITY"}
+                </small>
+              </span>
+            </div>
             <Button
               disabled={busy || !!reason}
               onClick={async () => {
@@ -280,6 +302,13 @@ export function InspectDialog({
               <ArrowRight />
             </Button>
             {reason && <p className="inspect-info">{reason}</p>}
+            {onPlan && !forecast.duplicate && (
+              <Button variant="outline" aria-pressed={planned} onClick={onPlan}>
+                <Pin />
+                {planned ? "Remove from my plan" : "Plan this district"}
+                <span className="plan-private">Only you can see this</span>
+              </Button>
+            )}
           </>
         )}
       </DialogContent>

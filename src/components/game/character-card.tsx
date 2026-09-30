@@ -20,18 +20,30 @@ export const ROLE_ICONS = [
   DraftingCompass,
   Shield,
 ];
+const DRAFT_SUMMARIES = [
+  "Skip a character’s turn.",
+  "Steal a character’s gold.",
+  "Swap hands or redraw cards.",
+  "Take the crown. Noble income.",
+  "Protect your city. Religious income.",
+  "+1 gold. Trade income.",
+  "+2 cards. Build up to 3 districts.",
+  "Destroy a district. Military income.",
+];
 export function CharacterCard({
   id,
   selected,
   onClick,
   disabled,
   compact = false,
+  draft = false,
 }: {
   id: number;
   selected?: boolean;
   onClick?: () => void;
   disabled?: boolean;
   compact?: boolean;
+  draft?: boolean;
 }) {
   const c = character(id);
   const Icon = ROLE_ICONS[id - 1];
@@ -59,7 +71,9 @@ export function CharacterCard({
       </div>
       <div className="character-caption">
         <h3>{c.name}</h3>
-        <span>{compact ? c.title : c.description}</span>
+        <span>
+          {draft ? DRAFT_SUMMARIES[id - 1] : compact ? c.title : c.description}
+        </span>
       </div>
     </button>
   );
