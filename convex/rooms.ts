@@ -285,10 +285,10 @@ export const act = mutation({
           throw new Error(
             "The table has moved on. Please try your action again.",
           );
-        // Test bots are opt-in per deployment: `npx convex env set ENABLE_BOTS true`.
+        // Keep test bots available in every deployment until release sign-off.
         if (
           (type === "add-bot" || type === "remove-bot") &&
-          process.env.ENABLE_BOTS !== "true"
+          process.env.ENABLE_BOTS === "false"
         )
           throw new Error("Test bots are turned off on this server.");
         if (type === "replace") {

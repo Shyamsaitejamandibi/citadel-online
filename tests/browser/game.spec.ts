@@ -317,6 +317,44 @@ test("guided practice is playable on mobile and never creates an online table", 
   await expect(page).toHaveURL(/\/$/);
 });
 
+test("a host can fill an online lobby with test bots and scheduled bots advance the draft", async ({
+  page,
+}) => {
+  const token = crypto.randomUUID();
+  const { code } = await convex.mutation(api.rooms.create, {
+    token,
+    name: "Bot tester",
+  });
+  await page.addInitScript((token) => {
+    localStorage.setItem("citadel-session", token);
+    localStorage.setItem("citadel-aid-seen", "1");
+    localStorage.setItem("citadel-moments", "off");
+  }, token);
+  await page.goto(`/play/${code}`);
+  await page.getByRole("button", { name: "Add test bot", exact: true }).click();
+  await expect(page.locator(".lobby-seat:not(.vacant)")).toHaveCount(2);
+  await expect(
+    page.locator(".lobby-seat").filter({ hasText: "Test bot" }),
+  ).toHaveCount(1);
+  await page
+    .getByRole("button", { name: "I’m ready to play", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Start the game with 2", exact: true })
+    .click();
+  await expect(
+    page.locator(".draft-cards .character-card").first(),
+  ).toBeVisible();
+  const before = await viewOf(page, code);
+  await page.locator(".draft-cards .character-card").first().click();
+  await page
+    .getByRole("button", { name: "Choose character", exact: true })
+    .click();
+  await expect
+    .poll(async () => (await viewOf(page, code)).version)
+    .toBeGreaterThan(before.version + 1);
+});
+
 test("ready checks synchronize and private plans survive reload without reaching rivals", async ({
   browser,
 }) => {

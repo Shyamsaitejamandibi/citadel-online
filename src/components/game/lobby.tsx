@@ -63,8 +63,8 @@ export function Lobby({
   const humans = g.players.filter((p) => !p.bot);
   const me = g.players.find((p) => p.id === g.me)!;
   const readyCount = humans.filter((p) => p.ready).length;
-  // Testing aid: set NEXT_PUBLIC_ENABLE_BOTS=true locally to fill seats with bots.
-  const testBots = process.env.NEXT_PUBLIC_ENABLE_BOTS === "true";
+  // Keep test bots available online until the owner signs off on release.
+  const testBots = process.env.NEXT_PUBLIC_ENABLE_BOTS !== "false";
   const hasPlayers = testBots ? g.players.length >= 2 : humans.length >= 2;
   const canStart = hasPlayers && humans.every((p) => p.ready);
   const empty = Math.max(0, 7 - g.players.length);

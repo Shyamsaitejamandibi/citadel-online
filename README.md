@@ -22,7 +22,7 @@ npm run dev -- --port 3002
 
 ## Play
 
-- **Play with friends:** create a private table, share its link or eight-character code, and start once at least two people are seated (2–7 players, 7- or 8-district finish line). Only real players: there are no computer rivals.
+- **Play with friends:** create a private table, share its link or eight-character code, and start once at least two seats are filled and every human is ready (2–7 players, 7- or 8-district finish line). Hosts can add and remove test bots in the lobby, including online deployments, while the game is being tested.
 - **Feel the table:** setup, invitations, seats, choices, hand, city, and game activity live on one tabletop scene. Online/away dots, a “thinking…” timer, public city miniatures, illustrated calling order, and full-screen game moments bring the players together.
 - **Player aid:** open the two-sided reference card (turn summary and the eight characters in calling order) whenever you need it. The active turn walks you through each step.
 - **Game after game:** “Play again” restarts with the same people at the same link, with a running win tally; the host can also reopen the lobby so new friends can join.
@@ -71,6 +71,8 @@ Any host works the same way: the Next.js app is stateless, so it runs fine on se
 The server validates every move. Opponent hands, uncalled roles, deck order and private draw choices are removed **before** responses reach the browser. Public player IDs are SHA-256 hashes of private session tokens. Convex mutations are serializable transactions, and state versions reject conflicting moves. Autopilot seats use their own hand and public city information to choose actions; hidden opponent characters are not used to select assassination or theft targets.
 
 Autopilot moves are scheduled on the Convex backend and advance even when nobody is viewing the table. Human turns have no time limit. Sessions are browser-bound; there is no account login, cross-device identity, matchmaking, ranking ladder, or expansion support.
+
+Test bots remain enabled by default locally and online until the owner explicitly confirms the game is fully ready. Do not disable them as part of routine deployment or cleanup. Once that sign-off is given, `NEXT_PUBLIC_ENABLE_BOTS=false` hides the lobby controls and `ENABLE_BOTS=false` on Convex rejects adding/removing test bots. Autopilot and guided practice are separate features.
 
 ## Verification
 

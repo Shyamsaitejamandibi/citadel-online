@@ -44,4 +44,6 @@ These are design interpretations of the inspected references, not claims that ou
 
 ## Boundaries
 
+Test bots are intentionally available in online lobbies during testing. Keep them enabled until the owner explicitly says the game is fully ready; deploying the app is not release sign-off. Only the host can add or remove bots, and every human must still mark themselves ready.
+
 This iteration keeps the classic base rules and the existing Convex session model. It does not add expansion characters, public matchmaking, accounts, camera feeds, or voice. Saved plans are browser-local; a room's authoritative state remains on Convex. Catch-up shows updates the live subscription received while hidden, rather than storing a separate long-term replay.
